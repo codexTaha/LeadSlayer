@@ -66,9 +66,16 @@ Your code MUST consume and emit these exact Pydantic v2 types from `app.models.s
 
 ### 3.2 Core Pydantic Models (Exact Fields)
 1. **`StartupInput`**: `product_name: str`, `product_url: str | None`, `description: str`, `founder_assumptions: str`, `slaying_level: SlayingLevel = "RUTHLESS"`, `execution_mode: ExecutionMode = "LIVE"`, `leads: list[LeadRecord] | None`
-2. **`MarketAuditResult`**: `market_reality_summary: str`, `founder_blind_spots: list[str]`, `sharpened_value_prop: str`, `anti_icp_red_flags: list[str]`, `market_readiness_score: int` (`0–100`)
+2. **`MarketAuditResult`**:
+   * `market_reality_summary: str`, `founder_blind_spots: list[str]`, `sharpened_value_prop: str`, `anti_icp_red_flags: list[str]`, `market_readiness_score: int` (`0–100`)
+   * `url_scraped_context_used: bool = False`, `search_grounding_used: bool = False`
+   * `assumption_gaps: list[AssumptionGap]` (`{ founder_belief, market_reality, severity, strategic_fix }`)
+   * `competitor_landscape: list[CompetitorInsight]` (`{ name, positioning_weakness, switching_trigger }`)
+   * `buying_objections: list[BuyingObjection]` (`{ objection, buyer_role, counter_angle }`)
+   * `readiness_breakdown: ReadinessBreakdown | None` (`{ pain_urgency, icp_clarity, differentiation, timing_fit }`)
 3. **`ICPProfile`**: `id: str` (`"icp_1"`..`"icp_3"`), `name: str`, `target_roles: list[str]`, `min_employees: int`, `max_employees: int`, `required_tech_signals: list[str]`, `buying_triggers: list[str]`, `instant_disqualifiers: list[str]`, `vector_doc_id: str`
-4. **`LeadRecord`**: `id: str`, `full_name: str`, `role: str`, `company: str`, `domain: str`, `industry: str`, `employee_count: int`, `funding_stage: str`, `tech_stack: list[str]`, `recent_signal: str`, `bio_snippet: str`, `email: str`
+4. **`HunterReport`**: `hunt_queries: list[HuntQuery]` (`{ source, query_string, signal_target }`), `enriched_sparse_leads: int`, `url_fetches_succeeded: int`, `total_leads_ready: int`
+5. **`LeadRecord`**: `id: str`, `full_name: str`, `role: str`, `company: str`, `domain: str`, `industry: str`, `employee_count: int`, `funding_stage: str`, `tech_stack: list[str]`, `recent_signal: str`, `bio_snippet: str`, `email: str`
 5. **`SlayerVerdict`**:
    * `lead_id: str`
    * `survived: bool`
@@ -102,7 +109,7 @@ The Lead Developer's `RunManager` will call **ONLY these 2 async functions** fro
 from typing import Protocol
 from pydantic import BaseModel
 from app.models.schemas import (
-    EmailDraft, ICPProfile, LeadRecord, MarketAuditResult,
+    EmailDraft, HunterReport, ICPProfile, MarketAuditResult,
     ModelId, PipelinePhase, SlayerVerdict
 )
 
@@ -112,6 +119,7 @@ class PipelineCallbacks(Protocol):
     async def on_model_call(self, model_id: ModelId) -> None: ...
     async def on_audit(self, audit: MarketAuditResult) -> None: ...
     async def on_icps(self, icps: list[ICPProfile]) -> None: ...
+    async def on_hunter_report(self, report: HunterReport) -> None: ...
     async def on_verdict(self, verdict: SlayerVerdict) -> None: ...
     async def on_email(self, draft: EmailDraft) -> None: ...
 
@@ -119,6 +127,7 @@ class PipelineFinalResult(BaseModel):
     run_id: str
     market_audit: MarketAuditResult
     icps: list[ICPProfile]
+    hunter_report: HunterReport | None = None
     verdicts: dict[str, SlayerVerdict]
     emails: dict[str, EmailDraft]
 ```
@@ -325,16 +334,21 @@ Built for maximum reliability against Gemini API rate limits:
 * **Method:** `async def run_stream(items: list[T], worker_fn: Callable[[T], Awaitable[R]]) -> AsyncIterator[tuple[T, R]]` yielding `(item, result)` via `asyncio.as_completed` as each finishes.
 
 #### Step C4: Implement the 5 ADK Agents (`auditor`, `icp`, `hunter`, `slayer`, `sniper`)
-1. **`auditor_agent.py`:**
+1. **`auditor_agent.py` (Market Research + Gap Analysis + URL Context):**
+   * First, if `startup_input.product_url` is set, call the pre-built helper `await fetch_site_context(startup_input.product_url, timeout_s=3.0)` from `app.services.url_fetcher`! Inject any extracted landing-page text into the prompt and set `url_scraped_context_used=True` if non-empty (cleanly ignore if `None`).
+   * Optionally enable **Gemini Google Search Grounding** (`google_search` tool in `google-adk` / `google-genai`, verifying SDK syntax first) on a research pre-pass or directly if supported alongside structured output; if search grounding fails or is unavailable offline, fall back cleanly to pure `gemini-4-hydrogen` reasoning (`search_grounding_used=False`) without ever crashing!
    * ADK `LlmAgent(name="market_auditor", model="gemini-4-hydrogen", output_schema=MarketAuditResult, output_key="market_audit")`.
+   * Must populate `assumption_gaps` (2–3 side-by-side Founder Belief vs. Market Reality gaps), `competitor_landscape` (2–4 competitors + switching triggers), `buying_objections` (2–3 objections + counter-angles), `readiness_breakdown`, and **4–5 `anti_icp_red_flags`**.
    * Executes via ADK `Runner` + `InMemorySessionService`, emits `callbacks.on_phase("AUDITING")`, `callbacks.on_model_call("gemini-4-hydrogen")`, `callbacks.on_audit(audit)`.
 2. **`icp_agent.py`:**
    * ADK `LlmAgent(name="icp_engine", model="gemini-4-hydrogen", output_schema=_ICPBatchOutput, output_key="icps")`.
    * Emits `callbacks.on_phase("ICP_GENERATION")`, `callbacks.on_model_call("gemini-4-hydrogen")`, `callbacks.on_icps(icps)`.
    * Calls `memory_store.index_knowledge(startup_input, audit, icps)` → emits `callbacks.on_model_call("gemini-embedding-2")` for embedding batches.
-3. **`hunter_agent.py`:**
+3. **`hunter_agent.py` (Hunt Query Generation + Smart Enrichment):**
    * ADK `BaseAgent` (`HunterSwarmAgent`): emits `callbacks.on_phase("HUNTING")`.
-   * Checks `leads` from `session.state`. If `> 20%` of leads lack `tech_stack` or `recent_signal` (sparse custom CSV), enriches sparse rows in batches of 10 via `gemini-3.5-flash-lite` + `GentleAdaptiveExecutor`. Otherwise skips LLM calls (`0ms` fast validation!).
+   * **Always generates 3–4 visible `HuntQuery` objects** from the 3 ICPs (either deterministically + 1 lightweight `gemini-3.5-flash-lite` query-synthesis call so judges see the exact Boolean hunt queries & signal sources).
+   * Checks `leads` from `session.state`. If `> 20%` of leads lack `tech_stack` or `recent_signal` (sparse bare-bones custom CSV), uses `fetch_site_context(f"https://{lead.domain}", timeout_s=2.0)` (via `GentleAdaptiveExecutor(concurrency=5)`) + `gemini-3.5-flash-lite` in batches of 10 to enrich missing signals! On clean 50-lead preset/CSV data, skips lead-by-lead enrichment (`enriched_sparse_leads=0`, zero wasted latency!).
+   * Emits `await callbacks.on_hunter_report(HunterReport(...))`.
    * Calls `memory_store.index_and_score_leads(leads)` → saves `hybrid_priors` (`dict[str, HybridMatchContext]`) to `session.state`.
 4. **`slayer_agent.py`:**
    * ADK `BaseAgent` (`SlayerSwarmAgent`): emits `callbacks.on_phase("SLAYING")`.

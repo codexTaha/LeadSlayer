@@ -155,6 +155,7 @@ Every field below must match **1:1** in name, type, and enum values between Pyth
    * `"agent_log"`
    * `"audit_completed"`
    * `"icps_generated"`
+   * `"hunter_report"`
    * `"leads_loaded"`
    * `"lead_verdict"`
    * `"email_drafted"`
@@ -172,12 +173,17 @@ Every field below must match **1:1** in name, type, and enum values between Pyth
    * `execution_mode: ExecutionMode = "LIVE"`
    * `leads: list[LeadRecord] | None` (if omitted, backend loads `data/leads_50.json`)
 
-2. **`MarketAuditResult`** *(Produced by `gemini-4-hydrogen`)*
+2. **`MarketAuditResult`** *(Produced by `gemini-4-hydrogen` + `url_fetcher.py` + optional Gemini Search Grounding)*
    * `market_reality_summary: str` (2–3 crisp sentences grounding reality)
    * `founder_blind_spots: list[str]` (2–3 assumptions challenged/corrected)
    * `sharpened_value_prop: str` (1-line killer positioning statement)
    * `anti_icp_red_flags: list[str]` (explicit rules fed directly into the Slayer!)
    * `market_readiness_score: int` (0–100)
+   * `url_scraped_context_used: bool = False`, `search_grounding_used: bool = False`
+   * `assumption_gaps: list[AssumptionGap]` (`{ founder_belief, market_reality, severity, strategic_fix }`)
+   * `competitor_landscape: list[CompetitorInsight]` (`{ name, positioning_weakness, switching_trigger }`)
+   * `buying_objections: list[BuyingObjection]` (`{ objection, buyer_role, counter_angle }`)
+   * `readiness_breakdown: ReadinessBreakdown | None` (`{ pain_urgency, icp_clarity, differentiation, timing_fit }`)
 
 3. **`ICPProfile`** *(Generated & embedded via `gemini-embedding-2`)*
    * `id: str` (e.g., `"icp_1"`)
@@ -189,6 +195,10 @@ Every field below must match **1:1** in name, type, and enum values between Pyth
    * `buying_triggers: list[str]`
    * `instant_disqualifiers: list[str]`
    * `vector_doc_id: str`
+
+3b. **`HunterReport`** *(Produced by `HunterSwarmAgent`)*
+   * `hunt_queries: list[HuntQuery]` (`{ source, query_string, signal_target }`)
+   * `enriched_sparse_leads: int`, `url_fetches_succeeded: int`, `total_leads_ready: int`
 
 4. **`LeadRecord`** *(Each of the 50 raw leads)*
    * `id: str` (`"lead_01"` … `"lead_50"`)
@@ -899,11 +909,13 @@ frontend/src/components/
      * `RUTHLESS` (**Bloodbath** — Crimson `#EF4444`, default): *"Zero mercy (~85% kill rate)"*
    * Primary CTA: **"Launch Autonomous GTM Engine"** (triggers `startPipeline(startupInput)`).
 2. **`MarketAuditCard.tsx` + `ICPCardsGrid.tsx` + `AntiICPLockStrip.tsx` (`#3`):**
+   * `MarketAuditCard.tsx` shows the **Readiness Breakdown** (`pain_urgency`, `icp_clarity`, `differentiation`, `timing_fit`), badges for `Live Site Read` / `Search Grounded`, the **Assumption vs. Reality Gap Analysis Table** (`assumption_gaps`), and **Competitor Wedge** cards (`competitor_landscape`).
    * Uses Framer Motion `staggerChildren: 0.08` to reveal the 3 ICP cards smoothly.
    * `AntiICPLockStrip.tsx` animates a crisp shield/lock icon snapping `marketAudit.anti_icp_red_flags` into the Slayer pipeline before Act 2 activates.
 
 ### B. Act 2 — `bloodbath/` Components (The 60 FPS Centerpiece)
 1. **`SlayerAutopsyBar.tsx` (`#6`):**
+   * Displays a compact **Hunter Signals & Queries Strip** (`hunterReport.hunt_queries`) showing the exact Boolean hunt queries & sources generated from the ICPs.
    * Large tabular numerals: `PROCESSED: X/50`, `KILLED: 42` (crimson), `SURVIVED: 8` (emerald), `KILL RATE: 84%`.
    * Horizontal clickable filter pills bound to `activeCategoryFilter`:
      `ALL (50)` | `SURVIVED (8)` | `COMPETITOR_LOCK_IN` | `TOO_SMALL` | `LAYOFFS_FREEZE` | `WRONG_PERSONA` | `NO_STACK_FIT` | `NO_URGENCY_SIGNAL`.

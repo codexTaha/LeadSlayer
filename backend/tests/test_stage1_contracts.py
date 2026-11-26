@@ -111,5 +111,38 @@ def test_exported_schema_spec_exists() -> None:
     spec_path = CONTRACTS_DIR / "schema_spec.json"
     assert spec_path.exists()
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    for key in ("StartupInput", "LeadRecord", "SlayerVerdict", "EmailDraft", "StreamEvent"):
+    for key in (
+        "StartupInput",
+        "MarketAuditResult",
+        "HunterReport",
+        "LeadRecord",
+        "SlayerVerdict",
+        "EmailDraft",
+        "StreamEvent",
+    ):
         assert key in spec["schemas"]
+
+
+def test_url_fetcher_safety_and_html_extraction() -> None:
+    from app.services.url_fetcher import extract_readable_text, is_safe_public_url
+
+    assert is_safe_public_url("http://127.0.0.1:8000") is None
+    assert is_safe_public_url("http://localhost/admin") is None
+    assert is_safe_public_url("http://192.168.1.10") is None
+    assert is_safe_public_url("kubeguard.ai") == "https://kubeguard.ai"
+
+    sample_html = """
+    <html>
+      <head>
+        <title>KubeGuard AI — Autonomous FinOps</title>
+        <meta name="description" content="Cut AWS EKS waste by 40% automatically." />
+        <script>console.log("ignore me");</script>
+      </head>
+      <body><h1>Predictive Kubernetes Guardrails</h1><p>Zero code changes.</p></body>
+    </html>
+    """
+    extracted = extract_readable_text(sample_html)
+    assert "KubeGuard AI" in extracted
+    assert "Cut AWS EKS waste" in extracted
+    assert "Predictive Kubernetes Guardrails" in extracted
+    assert "ignore me" not in extracted

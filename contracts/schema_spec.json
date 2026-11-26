@@ -162,6 +162,123 @@
       "type": "object"
     },
     "MarketAuditResult": {
+      "$defs": {
+        "AssumptionGap": {
+          "properties": {
+            "founder_belief": {
+              "title": "Founder Belief",
+              "type": "string"
+            },
+            "market_reality": {
+              "title": "Market Reality",
+              "type": "string"
+            },
+            "severity": {
+              "default": "HIGH",
+              "enum": [
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "strategic_fix": {
+              "title": "Strategic Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "founder_belief",
+            "market_reality",
+            "strategic_fix"
+          ],
+          "title": "AssumptionGap",
+          "type": "object"
+        },
+        "BuyingObjection": {
+          "properties": {
+            "objection": {
+              "title": "Objection",
+              "type": "string"
+            },
+            "buyer_role": {
+              "title": "Buyer Role",
+              "type": "string"
+            },
+            "counter_angle": {
+              "title": "Counter Angle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "objection",
+            "buyer_role",
+            "counter_angle"
+          ],
+          "title": "BuyingObjection",
+          "type": "object"
+        },
+        "CompetitorInsight": {
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "positioning_weakness": {
+              "title": "Positioning Weakness",
+              "type": "string"
+            },
+            "switching_trigger": {
+              "title": "Switching Trigger",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "positioning_weakness",
+            "switching_trigger"
+          ],
+          "title": "CompetitorInsight",
+          "type": "object"
+        },
+        "ReadinessBreakdown": {
+          "properties": {
+            "pain_urgency": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Pain Urgency",
+              "type": "integer"
+            },
+            "icp_clarity": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Icp Clarity",
+              "type": "integer"
+            },
+            "differentiation": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Differentiation",
+              "type": "integer"
+            },
+            "timing_fit": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Timing Fit",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "pain_urgency",
+            "icp_clarity",
+            "differentiation",
+            "timing_fit"
+          ],
+          "title": "ReadinessBreakdown",
+          "type": "object"
+        }
+      },
       "properties": {
         "market_reality_summary": {
           "title": "Market Reality Summary",
@@ -192,6 +309,48 @@
           "minimum": 0,
           "title": "Market Readiness Score",
           "type": "integer"
+        },
+        "url_scraped_context_used": {
+          "default": false,
+          "title": "Url Scraped Context Used",
+          "type": "boolean"
+        },
+        "search_grounding_used": {
+          "default": false,
+          "title": "Search Grounding Used",
+          "type": "boolean"
+        },
+        "assumption_gaps": {
+          "items": {
+            "$ref": "#/$defs/AssumptionGap"
+          },
+          "title": "Assumption Gaps",
+          "type": "array"
+        },
+        "competitor_landscape": {
+          "items": {
+            "$ref": "#/$defs/CompetitorInsight"
+          },
+          "title": "Competitor Landscape",
+          "type": "array"
+        },
+        "buying_objections": {
+          "items": {
+            "$ref": "#/$defs/BuyingObjection"
+          },
+          "title": "Buying Objections",
+          "type": "array"
+        },
+        "readiness_breakdown": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReadinessBreakdown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -269,6 +428,59 @@
         "vector_doc_id"
       ],
       "title": "ICPProfile",
+      "type": "object"
+    },
+    "HunterReport": {
+      "$defs": {
+        "HuntQuery": {
+          "properties": {
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "query_string": {
+              "title": "Query String",
+              "type": "string"
+            },
+            "signal_target": {
+              "title": "Signal Target",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "query_string",
+            "signal_target"
+          ],
+          "title": "HuntQuery",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "hunt_queries": {
+          "items": {
+            "$ref": "#/$defs/HuntQuery"
+          },
+          "title": "Hunt Queries",
+          "type": "array"
+        },
+        "enriched_sparse_leads": {
+          "default": 0,
+          "title": "Enriched Sparse Leads",
+          "type": "integer"
+        },
+        "url_fetches_succeeded": {
+          "default": 0,
+          "title": "Url Fetches Succeeded",
+          "type": "integer"
+        },
+        "total_leads_ready": {
+          "default": 0,
+          "title": "Total Leads Ready",
+          "type": "integer"
+        }
+      },
+      "title": "HunterReport",
       "type": "object"
     },
     "LeadRecord": {
@@ -630,6 +842,7 @@
             "agent_log",
             "audit_completed",
             "icps_generated",
+            "hunter_report",
             "leads_loaded",
             "lead_verdict",
             "email_drafted",
@@ -675,6 +888,85 @@
     },
     "RunStateSnapshot": {
       "$defs": {
+        "AssumptionGap": {
+          "properties": {
+            "founder_belief": {
+              "title": "Founder Belief",
+              "type": "string"
+            },
+            "market_reality": {
+              "title": "Market Reality",
+              "type": "string"
+            },
+            "severity": {
+              "default": "HIGH",
+              "enum": [
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "strategic_fix": {
+              "title": "Strategic Fix",
+              "type": "string"
+            }
+          },
+          "required": [
+            "founder_belief",
+            "market_reality",
+            "strategic_fix"
+          ],
+          "title": "AssumptionGap",
+          "type": "object"
+        },
+        "BuyingObjection": {
+          "properties": {
+            "objection": {
+              "title": "Objection",
+              "type": "string"
+            },
+            "buyer_role": {
+              "title": "Buyer Role",
+              "type": "string"
+            },
+            "counter_angle": {
+              "title": "Counter Angle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "objection",
+            "buyer_role",
+            "counter_angle"
+          ],
+          "title": "BuyingObjection",
+          "type": "object"
+        },
+        "CompetitorInsight": {
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "positioning_weakness": {
+              "title": "Positioning Weakness",
+              "type": "string"
+            },
+            "switching_trigger": {
+              "title": "Switching Trigger",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "positioning_weakness",
+            "switching_trigger"
+          ],
+          "title": "CompetitorInsight",
+          "type": "object"
+        },
         "EmailDraft": {
           "properties": {
             "lead_id": {
@@ -756,6 +1048,57 @@
           ],
           "title": "ExecutionMode",
           "type": "string"
+        },
+        "HuntQuery": {
+          "properties": {
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "query_string": {
+              "title": "Query String",
+              "type": "string"
+            },
+            "signal_target": {
+              "title": "Signal Target",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "query_string",
+            "signal_target"
+          ],
+          "title": "HuntQuery",
+          "type": "object"
+        },
+        "HunterReport": {
+          "properties": {
+            "hunt_queries": {
+              "items": {
+                "$ref": "#/$defs/HuntQuery"
+              },
+              "title": "Hunt Queries",
+              "type": "array"
+            },
+            "enriched_sparse_leads": {
+              "default": 0,
+              "title": "Enriched Sparse Leads",
+              "type": "integer"
+            },
+            "url_fetches_succeeded": {
+              "default": 0,
+              "title": "Url Fetches Succeeded",
+              "type": "integer"
+            },
+            "total_leads_ready": {
+              "default": 0,
+              "title": "Total Leads Ready",
+              "type": "integer"
+            }
+          },
+          "title": "HunterReport",
+          "type": "object"
         },
         "ICPProfile": {
           "properties": {
@@ -934,6 +1277,48 @@
               "minimum": 0,
               "title": "Market Readiness Score",
               "type": "integer"
+            },
+            "url_scraped_context_used": {
+              "default": false,
+              "title": "Url Scraped Context Used",
+              "type": "boolean"
+            },
+            "search_grounding_used": {
+              "default": false,
+              "title": "Search Grounding Used",
+              "type": "boolean"
+            },
+            "assumption_gaps": {
+              "items": {
+                "$ref": "#/$defs/AssumptionGap"
+              },
+              "title": "Assumption Gaps",
+              "type": "array"
+            },
+            "competitor_landscape": {
+              "items": {
+                "$ref": "#/$defs/CompetitorInsight"
+              },
+              "title": "Competitor Landscape",
+              "type": "array"
+            },
+            "buying_objections": {
+              "items": {
+                "$ref": "#/$defs/BuyingObjection"
+              },
+              "title": "Buying Objections",
+              "type": "array"
+            },
+            "readiness_breakdown": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReadinessBreakdown"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [
@@ -969,6 +1354,42 @@
           ],
           "title": "PipelinePhase",
           "type": "string"
+        },
+        "ReadinessBreakdown": {
+          "properties": {
+            "pain_urgency": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Pain Urgency",
+              "type": "integer"
+            },
+            "icp_clarity": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Icp Clarity",
+              "type": "integer"
+            },
+            "differentiation": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Differentiation",
+              "type": "integer"
+            },
+            "timing_fit": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Timing Fit",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "pain_urgency",
+            "icp_clarity",
+            "differentiation",
+            "timing_fit"
+          ],
+          "title": "ReadinessBreakdown",
+          "type": "object"
         },
         "RejectionCategory": {
           "enum": [
@@ -1247,6 +1668,17 @@
           },
           "title": "Icps",
           "type": "array"
+        },
+        "hunter_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HunterReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "leads": {
           "items": {

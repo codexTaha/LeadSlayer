@@ -49,6 +49,7 @@ class StreamEventType(str, Enum):
     AGENT_LOG = "agent_log"
     AUDIT_COMPLETED = "audit_completed"
     ICPS_GENERATED = "icps_generated"
+    HUNTER_REPORT = "hunter_report"
     LEADS_LOADED = "leads_loaded"
     LEAD_VERDICT = "lead_verdict"
     EMAIL_DRAFTED = "email_drafted"
@@ -93,12 +94,44 @@ class StartupInput(BaseModel):
     leads: list[LeadRecord] | None = None
 
 
+class AssumptionGap(BaseModel):
+    founder_belief: str
+    market_reality: str
+    severity: Literal["HIGH", "MEDIUM", "LOW"] = "HIGH"
+    strategic_fix: str
+
+
+class CompetitorInsight(BaseModel):
+    name: str
+    positioning_weakness: str
+    switching_trigger: str
+
+
+class BuyingObjection(BaseModel):
+    objection: str
+    buyer_role: str
+    counter_angle: str
+
+
+class ReadinessBreakdown(BaseModel):
+    pain_urgency: int = Field(ge=0, le=100)
+    icp_clarity: int = Field(ge=0, le=100)
+    differentiation: int = Field(ge=0, le=100)
+    timing_fit: int = Field(ge=0, le=100)
+
+
 class MarketAuditResult(BaseModel):
     market_reality_summary: str
     founder_blind_spots: list[str] = Field(min_length=1)
     sharpened_value_prop: str
     anti_icp_red_flags: list[str] = Field(min_length=1)
     market_readiness_score: int = Field(ge=0, le=100)
+    url_scraped_context_used: bool = False
+    search_grounding_used: bool = False
+    assumption_gaps: list[AssumptionGap] = Field(default_factory=list)
+    competitor_landscape: list[CompetitorInsight] = Field(default_factory=list)
+    buying_objections: list[BuyingObjection] = Field(default_factory=list)
+    readiness_breakdown: ReadinessBreakdown | None = None
 
 
 class ICPProfile(BaseModel):
@@ -111,6 +144,19 @@ class ICPProfile(BaseModel):
     buying_triggers: list[str]
     instant_disqualifiers: list[str]
     vector_doc_id: str
+
+
+class HuntQuery(BaseModel):
+    source: str
+    query_string: str
+    signal_target: str
+
+
+class HunterReport(BaseModel):
+    hunt_queries: list[HuntQuery] = Field(default_factory=list)
+    enriched_sparse_leads: int = 0
+    url_fetches_succeeded: int = 0
+    total_leads_ready: int = 0
 
 
 class SlayerVerdict(BaseModel):
@@ -179,6 +225,7 @@ class RunStateSnapshot(BaseModel):
     startup_input: StartupInput
     market_audit: MarketAuditResult | None = None
     icps: list[ICPProfile] = Field(default_factory=list)
+    hunter_report: HunterReport | None = None
     leads: list[LeadRecord] = Field(default_factory=list)
     verdicts: dict[str, SlayerVerdict] = Field(default_factory=dict)
     emails: dict[str, EmailDraft] = Field(default_factory=dict)

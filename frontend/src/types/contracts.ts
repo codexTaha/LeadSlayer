@@ -34,6 +34,7 @@ export type StreamEventType =
   | "agent_log"
   | "audit_completed"
   | "icps_generated"
+  | "hunter_report"
   | "leads_loaded"
   | "lead_verdict"
   | "email_drafted"
@@ -66,12 +67,44 @@ export interface StartupInput {
   leads: LeadRecord[] | null;
 }
 
+export interface AssumptionGap {
+  founder_belief: string;
+  market_reality: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  strategic_fix: string;
+}
+
+export interface CompetitorInsight {
+  name: string;
+  positioning_weakness: string;
+  switching_trigger: string;
+}
+
+export interface BuyingObjection {
+  objection: string;
+  buyer_role: string;
+  counter_angle: string;
+}
+
+export interface ReadinessBreakdown {
+  pain_urgency: number;
+  icp_clarity: number;
+  differentiation: number;
+  timing_fit: number;
+}
+
 export interface MarketAuditResult {
   market_reality_summary: string;
   founder_blind_spots: string[];
   sharpened_value_prop: string;
   anti_icp_red_flags: string[];
   market_readiness_score: number;
+  url_scraped_context_used: boolean;
+  search_grounding_used: boolean;
+  assumption_gaps: AssumptionGap[];
+  competitor_landscape: CompetitorInsight[];
+  buying_objections: BuyingObjection[];
+  readiness_breakdown: ReadinessBreakdown | null;
 }
 
 export interface ICPProfile {
@@ -84,6 +117,19 @@ export interface ICPProfile {
   buying_triggers: string[];
   instant_disqualifiers: string[];
   vector_doc_id: string;
+}
+
+export interface HuntQuery {
+  source: string;
+  query_string: string;
+  signal_target: string;
+}
+
+export interface HunterReport {
+  hunt_queries: HuntQuery[];
+  enriched_sparse_leads: number;
+  url_fetches_succeeded: number;
+  total_leads_ready: number;
 }
 
 export interface SlayerVerdict {
@@ -165,6 +211,13 @@ export type StreamEvent =
       event_id: number;
       run_id: string;
       timestamp_ms: number;
+      event_type: "hunter_report";
+      payload: { hunter_report: HunterReport; telemetry?: TelemetryMetrics };
+    }
+  | {
+      event_id: number;
+      run_id: string;
+      timestamp_ms: number;
       event_type: "leads_loaded";
       payload: { leads: LeadRecord[] };
     }
@@ -210,6 +263,7 @@ export interface RunStateSnapshot {
   startup_input: StartupInput;
   market_audit: MarketAuditResult | null;
   icps: ICPProfile[];
+  hunter_report: HunterReport | null;
   leads: LeadRecord[];
   verdicts: Record<string, SlayerVerdict>;
   emails: Record<string, EmailDraft>;

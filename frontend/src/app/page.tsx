@@ -1,118 +1,136 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Activity, CheckCircle2, Crosshair, ShieldAlert } from "lucide-react";
-import type { HealthResponse, PresetResponse } from "@/types/contracts";
+import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, ChevronUp, Terminal } from "lucide-react";
+import { AuditWorkspace } from "@/components/audit/AuditWorkspace";
+import { BloodbathMatrix } from "@/components/bloodbath/BloodbathMatrix";
+import { LeadAutopsyDrawer } from "@/components/bloodbath/LeadAutopsyDrawer";
+import { CommandCenterShell } from "@/components/shell/CommandCenterShell";
+import { SniperDeck } from "@/components/sniper/SniperDeck";
+import { useLeadSlayerStream } from "@/hooks/useLeadSlayerStream";
+import { fetchDemoPreset, startPipeline } from "@/lib/api";
+import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 
-export default function Stage1HealthPage() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [preset, setPreset] = useState<PresetResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export default function CommandCenterPage() {
+  useLeadSlayerStream();
+
+  const activeViewTab = useLeadSlayerStore((s) => s.activeViewTab);
+  const startupInput = useLeadSlayerStore((s) => s.startupInput);
+  const leadOrder = useLeadSlayerStore((s) => s.leadOrder);
+  const agentLogs = useLeadSlayerStore((s) => s.agentLogs);
+  const setPresetData = useLeadSlayerStore((s) => s.setPresetData);
+  const setIsLoadingPreset = useLeadSlayerStore((s) => s.setIsLoadingPreset);
+  const setIsStartingRun = useLeadSlayerStore((s) => s.setIsStartingRun);
+  const beginRun = useLeadSlayerStore((s) => s.beginRun);
+  const setError = useLeadSlayerStore((s) => s.setError);
+
+  const [logsExpanded, setLogsExpanded] = useState(false);
+
+  const loadDefaultPreset = useCallback(async () => {
+    setIsLoadingPreset(true);
+    try {
+      const preset = await fetchDemoPreset();
+      setPresetData(preset.startup, preset.leads);
+    } catch {
+      // Non-fatal on initial mount; user can click Load Preset button
+    } finally {
+      setIsLoadingPreset(false);
+    }
+  }, [setIsLoadingPreset, setPresetData]);
 
   useEffect(() => {
-    let active = true;
-    async function checkBackend() {
-      try {
-        const [healthRes, presetRes] = await Promise.all([
-          fetch("/api/health"),
-          fetch("/api/demo/preset"),
-        ]);
-        if (!healthRes.ok || !presetRes.ok) {
-          throw new Error(
-            `Backend check failed (${healthRes.status}/${presetRes.status})`
-          );
-        }
-        const [healthJson, presetJson] = (await Promise.all([
-          healthRes.json(),
-          presetRes.json(),
-        ])) as [HealthResponse, PresetResponse];
-        if (active) {
-          setHealth(healthJson);
-          setPreset(presetJson);
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to reach FastAPI backend on port 8000."
-          );
-        }
-      }
+    if (leadOrder.length === 0 && !startupInput.product_name) {
+      void loadDefaultPreset();
     }
-    checkBackend();
-    return () => {
-      active = false;
-    };
-  }, []);
+  }, [leadOrder.length, startupInput.product_name, loadDefaultPreset]);
+
+  const handleLaunch = useCallback(async () => {
+    setIsStartingRun(true);
+    setError(null);
+    try {
+      const { run_id } = await startPipeline(startupInput);
+      beginRun(run_id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start pipeline."
+      );
+      setIsStartingRun(false);
+    }
+  }, [startupInput, beginRun, setError, setIsStartingRun]);
 
   return (
-    <main className="min-h-screen bg-[#07090D] text-zinc-100 p-8 flex flex-col items-center justify-center">
-      <div className="w-full max-w-2xl rounded-xl border border-zinc-800 bg-zinc-950/90 p-6 shadow-2xl space-y-5">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-3">
-            <Crosshair className="w-6 h-6 text-rose-500" />
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight">
-                LeadSlayer AI — Stage 1 Contract & Proxy Check
-              </h1>
-              <p className="text-xs text-zinc-400">
-                Verifying Next.js ↔ FastAPI typed contracts & 50-lead dataset
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-mono text-zinc-300">
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
-            STAGE 1
-          </span>
-        </div>
+    <CommandCenterShell onRetryRun={handleLaunch}>
+      <AnimatePresence mode="wait">
+        {activeViewTab === "AUDIT" && (
+          <motion.div
+            key="view-audit"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <AuditWorkspace onLaunch={handleLaunch} />
+          </motion.div>
+        )}
 
-        {error && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
-            <ShieldAlert className="w-5 h-5 shrink-0 text-amber-400" />
-            <span>
-              Backend offline right now ({error}). Start FastAPI with{" "}
-              <code className="font-mono text-amber-100">
-                uvicorn app.main:app --port 8000
-              </code>{" "}
-              and refresh.
+        {activeViewTab === "BLOODBATH" && (
+          <motion.div
+            key="view-bloodbath"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <BloodbathMatrix />
+          </motion.div>
+        )}
+
+        {activeViewTab === "SNIPER" && (
+          <motion.div
+            key="view-sniper"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <SniperDeck />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {agentLogs.length > 0 && (
+        <div className="mt-6 rounded-xl border border-zinc-800/80 bg-zinc-950/70">
+          <button
+            type="button"
+            onClick={() => setLogsExpanded((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-2.5 text-xs font-mono text-zinc-400 hover:text-zinc-200 cursor-pointer"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Terminal className="h-3.5 w-3.5 text-zinc-500" />
+              ADK Execution Trace ({agentLogs.length} events) ·{" "}
+              <span className="text-zinc-300 truncate max-w-md">
+                {agentLogs[agentLogs.length - 1]}
+              </span>
             </span>
-          </div>
-        )}
+            {logsExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </button>
 
-        {health && (
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-2">
-            <div className="flex items-center gap-2 text-emerald-300 text-sm font-medium">
-              <CheckCircle2 className="w-4 h-4" />
-              Backend Connected ({health.status.toUpperCase()})
+          {logsExpanded && (
+            <div className="max-h-44 overflow-y-auto border-t border-zinc-800/80 px-4 py-2.5 space-y-1 font-mono text-[11px] text-zinc-400">
+              {agentLogs.map((log, i) => (
+                <div key={i}>{log}</div>
+              ))}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs font-mono text-zinc-300">
-              <div className="rounded bg-zinc-900/80 p-2 border border-zinc-800">
-                Brain: {health.models.brain}
-              </div>
-              <div className="rounded bg-zinc-900/80 p-2 border border-zinc-800">
-                Workhorse: {health.models.workhorse}
-              </div>
-              <div className="rounded bg-zinc-900/80 p-2 border border-zinc-800">
-                Memory: {health.models.embedding}
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
-        {preset && (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 space-y-1 text-sm">
-            <div className="font-medium text-zinc-100">
-              Preset Loaded: {preset.startup.product_name} (
-              {preset.leads.length} leads)
-            </div>
-            <p className="text-xs text-zinc-400">
-              Default Mode: {preset.startup.slaying_level} | First Lead:{" "}
-              {preset.leads[0]?.full_name} ({preset.leads[0]?.company})
-            </p>
-          </div>
-        )}
-      </div>
-    </main>
+      <LeadAutopsyDrawer />
+    </CommandCenterShell>
   );
 }

@@ -1,0 +1,9 @@
+{
+  "product_name": "KubeGuard AI",
+  "product_url": "https://kubeguard.ai",
+  "description": "KubeGuard AI is an autonomous Kubernetes and Cloud FinOps guardrail for engineering teams running production workloads on AWS EKS and GCP GKE. It continuously analyzes pod telemetry, predicts cloud cost spikes 48 hours before billing shocks, eliminates over-provisioned GPU and compute nodes, and auto-tunes HPA autoscaling policies with zero application code changes.",
+  "founder_assumptions": "Any software or tech company using cloud servers with a CTO or Engineering Manager needs KubeGuard AI to cut their cloud bill.",
+  "slaying_level": "RUTHLESS",
+  "execution_mode": "LIVE",
+  "leads": null
+}

@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Literal
+from pydantic import BaseModel, Field, model_validator
+
+
+class SlayingLevel(str, Enum):
+    LENIENT = "LENIENT"
+    NORMAL = "NORMAL"
+    RUTHLESS = "RUTHLESS"
+
+
+class ExecutionMode(str, Enum):
+    LIVE = "LIVE"
+    SAFE_REPLAY = "SAFE_REPLAY"
+
+
+class PipelinePhase(str, Enum):
+    IDLE = "IDLE"
+    AUDITING = "AUDITING"
+    ICP_GENERATION = "ICP_GENERATION"
+    HUNTING = "HUNTING"
+    SLAYING = "SLAYING"
+    SNIPING = "SNIPING"
+    READY = "READY"
+    DISPATCHED = "DISPATCHED"
+    ERROR = "ERROR"
+
+
+class RejectionCategory(str, Enum):
+    COMPETITOR_LOCK_IN = "COMPETITOR_LOCK_IN"
+    TOO_SMALL = "TOO_SMALL"
+    LAYOFFS_FREEZE = "LAYOFFS_FREEZE"
+    WRONG_PERSONA = "WRONG_PERSONA"
+    NO_STACK_FIT = "NO_STACK_FIT"
+    BUILT_IN_HOUSE = "BUILT_IN_HOUSE"
+    NO_URGENCY_SIGNAL = "NO_URGENCY_SIGNAL"
+
+
+class ModelId(str, Enum):
+    GEMINI_4_HYDROGEN = "gemini-4-hydrogen"
+    GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite"
+    GEMINI_EMBEDDING_2 = "gemini-embedding-2"
+
+
+class StreamEventType(str, Enum):
+    PHASE_CHANGED = "phase_changed"
+    AGENT_LOG = "agent_log"
+    AUDIT_COMPLETED = "audit_completed"
+    ICPS_GENERATED = "icps_generated"
+    LEADS_LOADED = "leads_loaded"
+    LEAD_VERDICT = "lead_verdict"
+    EMAIL_DRAFTED = "email_drafted"
+    TELEMETRY_UPDATE = "telemetry_update"
+    PIPELINE_COMPLETED = "pipeline_completed"
+    PIPELINE_ERROR = "pipeline_error"
+
+
+FundingStage = Literal[
+    "Bootstrapped",
+    "Pre-Seed",
+    "Seed",
+    "Series A",
+    "Series B",
+    "Series C",
+    "Public",
+]
+
+
+class LeadRecord(BaseModel):
+    id: str = Field(min_length=1)
+    full_name: str = Field(min_length=1)
+    role: str = Field(min_length=1)
+    company: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    industry: str = Field(min_length=1)
+    employee_count: int = Field(ge=1)
+    funding_stage: str = Field(min_length=1)
+    tech_stack: list[str] = Field(default_factory=list)
+    recent_signal: str = Field(default="")
+    bio_snippet: str = Field(default="")
+    email: str = Field(min_length=3)
+
+
+class StartupInput(BaseModel):
+    product_name: str = Field(min_length=2)
+    product_url: str | None = None
+    description: str = Field(min_length=20)
+    founder_assumptions: str = Field(min_length=5)
+    slaying_level: SlayingLevel = SlayingLevel.RUTHLESS
+    execution_mode: ExecutionMode = ExecutionMode.LIVE
+    leads: list[LeadRecord] | None = None
+
+
+class MarketAuditResult(BaseModel):
+    market_reality_summary: str
+    founder_blind_spots: list[str] = Field(min_length=1)
+    sharpened_value_prop: str
+    anti_icp_red_flags: list[str] = Field(min_length=1)
+    market_readiness_score: int = Field(ge=0, le=100)
+
+
+class ICPProfile(BaseModel):
+    id: str
+    name: str
+    target_roles: list[str]
+    min_employees: int = Field(ge=1)
+    max_employees: int = Field(ge=1)
+    required_tech_signals: list[str]
+    buying_triggers: list[str]
+    instant_disqualifiers: list[str]
+    vector_doc_id: str
+
+
+class SlayerVerdict(BaseModel):
+    lead_id: str
+    survived: bool
+    resurrected_by_user: bool = False
+    rejection_category: RejectionCategory | None = None
+    headline_tag: str
+    reasoning: str
+    matched_icp_id: str | None = None
+    icp_similarity_score: float = Field(ge=0.0, le=1.0)
+    anti_icp_similarity_score: float = Field(ge=0.0, le=1.0)
+    structural_match_score: float = Field(ge=0.0, le=1.0)
+    qualification_score: int = Field(ge=0, le=100)
+    confidence: float = Field(ge=0.0, le=1.0)
+    slaying_level_applied: SlayingLevel
+    latency_ms: int = Field(ge=0)
+    model_used: ModelId = ModelId.GEMINI_3_5_FLASH_LITE
+
+    @model_validator(mode="after")
+    def validate_rejection_category(self) -> "SlayerVerdict":
+        if not self.survived and self.rejection_category is None:
+            raise ValueError("rejection_category is required when survived is False")
+        return self
+
+
+class EmailDraft(BaseModel):
+    lead_id: str
+    recipient_name: str
+    recipient_email: str
+    company: str
+    subject: str
+    body: str
+    cited_survival_signal: str
+    email_evidence_phrase: str
+    matched_product_chunk: str
+    personalization_score: int = Field(ge=0, le=100)
+    approved: bool = True
+    status: Literal["DRAFTED", "SENT"] = "DRAFTED"
+
+
+class TelemetryMetrics(BaseModel):
+    total_leads: int = 0
+    processed_leads: int = 0
+    killed_count: int = 0
+    survived_count: int = 0
+    kill_rate_pct: float = 0.0
+    rejection_breakdown: dict[str, int] = Field(default_factory=dict)
+    model_calls: dict[str, int] = Field(default_factory=dict)
+    avg_slayer_latency_ms: float = 0.0
+    elapsed_ms: int = 0
+    estimated_saved_spam_hours: float = 0.0
+
+
+class StreamEvent(BaseModel):
+    event_id: int = Field(ge=1)
+    run_id: str
+    timestamp_ms: int
+    event_type: StreamEventType
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunStateSnapshot(BaseModel):
+    run_id: str
+    phase: PipelinePhase
+    startup_input: StartupInput
+    market_audit: MarketAuditResult | None = None
+    icps: list[ICPProfile] = Field(default_factory=list)
+    leads: list[LeadRecord] = Field(default_factory=list)
+    verdicts: dict[str, SlayerVerdict] = Field(default_factory=dict)
+    emails: dict[str, EmailDraft] = Field(default_factory=dict)
+    telemetry: TelemetryMetrics = Field(default_factory=TelemetryMetrics)
+    error_message: str | None = None
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    models: dict[str, str]
+    default_demo_ready: bool
+
+
+class PresetResponse(BaseModel):
+    startup: StartupInput
+    leads: list[LeadRecord]
+
+
+class ParseCsvResponse(BaseModel):
+    count: int
+    leads: list[LeadRecord]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PipelineStartResponse(BaseModel):
+    run_id: str
+    stream_url: str
+
+
+class ResurrectResponse(BaseModel):
+    verdict: SlayerVerdict
+    email_draft: EmailDraft
+    telemetry: TelemetryMetrics
+
+
+class DispatchRequest(BaseModel):
+    lead_ids: list[str]
+
+
+class DispatchReceipt(BaseModel):
+    lead_id: str
+    recipient_email: str
+    status: Literal["SENT"] = "SENT"
+
+
+class DispatchResponse(BaseModel):
+    dispatched_count: int
+    sent_at: str
+    receipts: list[DispatchReceipt]

@@ -1,0 +1,1990 @@
+{
+  "title": "LeadSlayer AI Shared Data Contracts",
+  "version": "1.0.0",
+  "schemas": {
+    "StartupInput": {
+      "$defs": {
+        "ExecutionMode": {
+          "enum": [
+            "LIVE",
+            "SAFE_REPLAY"
+          ],
+          "title": "ExecutionMode",
+          "type": "string"
+        },
+        "LeadRecord": {
+          "properties": {
+            "id": {
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "full_name": {
+              "minLength": 1,
+              "title": "Full Name",
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "title": "Role",
+              "type": "string"
+            },
+            "company": {
+              "minLength": 1,
+              "title": "Company",
+              "type": "string"
+            },
+            "domain": {
+              "minLength": 1,
+              "title": "Domain",
+              "type": "string"
+            },
+            "industry": {
+              "minLength": 1,
+              "title": "Industry",
+              "type": "string"
+            },
+            "employee_count": {
+              "minimum": 1,
+              "title": "Employee Count",
+              "type": "integer"
+            },
+            "funding_stage": {
+              "minLength": 1,
+              "title": "Funding Stage",
+              "type": "string"
+            },
+            "tech_stack": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Tech Stack",
+              "type": "array"
+            },
+            "recent_signal": {
+              "default": "",
+              "title": "Recent Signal",
+              "type": "string"
+            },
+            "bio_snippet": {
+              "default": "",
+              "title": "Bio Snippet",
+              "type": "string"
+            },
+            "email": {
+              "minLength": 3,
+              "title": "Email",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "full_name",
+            "role",
+            "company",
+            "domain",
+            "industry",
+            "employee_count",
+            "funding_stage",
+            "email"
+          ],
+          "title": "LeadRecord",
+          "type": "object"
+        },
+        "SlayingLevel": {
+          "enum": [
+            "LENIENT",
+            "NORMAL",
+            "RUTHLESS"
+          ],
+          "title": "SlayingLevel",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "product_name": {
+          "minLength": 2,
+          "title": "Product Name",
+          "type": "string"
+        },
+        "product_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Product Url"
+        },
+        "description": {
+          "minLength": 20,
+          "title": "Description",
+          "type": "string"
+        },
+        "founder_assumptions": {
+          "minLength": 5,
+          "title": "Founder Assumptions",
+          "type": "string"
+        },
+        "slaying_level": {
+          "$ref": "#/$defs/SlayingLevel",
+          "default": "RUTHLESS"
+        },
+        "execution_mode": {
+          "$ref": "#/$defs/ExecutionMode",
+          "default": "LIVE"
+        },
+        "leads": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/LeadRecord"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leads"
+        }
+      },
+      "required": [
+        "product_name",
+        "description",
+        "founder_assumptions"
+      ],
+      "title": "StartupInput",
+      "type": "object"
+    },
+    "MarketAuditResult": {
+      "properties": {
+        "market_reality_summary": {
+          "title": "Market Reality Summary",
+          "type": "string"
+        },
+        "founder_blind_spots": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Founder Blind Spots",
+          "type": "array"
+        },
+        "sharpened_value_prop": {
+          "title": "Sharpened Value Prop",
+          "type": "string"
+        },
+        "anti_icp_red_flags": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Anti Icp Red Flags",
+          "type": "array"
+        },
+        "market_readiness_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Market Readiness Score",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "market_reality_summary",
+        "founder_blind_spots",
+        "sharpened_value_prop",
+        "anti_icp_red_flags",
+        "market_readiness_score"
+      ],
+      "title": "MarketAuditResult",
+      "type": "object"
+    },
+    "ICPProfile": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "target_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Roles",
+          "type": "array"
+        },
+        "min_employees": {
+          "minimum": 1,
+          "title": "Min Employees",
+          "type": "integer"
+        },
+        "max_employees": {
+          "minimum": 1,
+          "title": "Max Employees",
+          "type": "integer"
+        },
+        "required_tech_signals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Tech Signals",
+          "type": "array"
+        },
+        "buying_triggers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Buying Triggers",
+          "type": "array"
+        },
+        "instant_disqualifiers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Instant Disqualifiers",
+          "type": "array"
+        },
+        "vector_doc_id": {
+          "title": "Vector Doc Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "target_roles",
+        "min_employees",
+        "max_employees",
+        "required_tech_signals",
+        "buying_triggers",
+        "instant_disqualifiers",
+        "vector_doc_id"
+      ],
+      "title": "ICPProfile",
+      "type": "object"
+    },
+    "LeadRecord": {
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "full_name": {
+          "minLength": 1,
+          "title": "Full Name",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "company": {
+          "minLength": 1,
+          "title": "Company",
+          "type": "string"
+        },
+        "domain": {
+          "minLength": 1,
+          "title": "Domain",
+          "type": "string"
+        },
+        "industry": {
+          "minLength": 1,
+          "title": "Industry",
+          "type": "string"
+        },
+        "employee_count": {
+          "minimum": 1,
+          "title": "Employee Count",
+          "type": "integer"
+        },
+        "funding_stage": {
+          "minLength": 1,
+          "title": "Funding Stage",
+          "type": "string"
+        },
+        "tech_stack": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tech Stack",
+          "type": "array"
+        },
+        "recent_signal": {
+          "default": "",
+          "title": "Recent Signal",
+          "type": "string"
+        },
+        "bio_snippet": {
+          "default": "",
+          "title": "Bio Snippet",
+          "type": "string"
+        },
+        "email": {
+          "minLength": 3,
+          "title": "Email",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "full_name",
+        "role",
+        "company",
+        "domain",
+        "industry",
+        "employee_count",
+        "funding_stage",
+        "email"
+      ],
+      "title": "LeadRecord",
+      "type": "object"
+    },
+    "SlayerVerdict": {
+      "$defs": {
+        "ModelId": {
+          "enum": [
+            "gemini-4-hydrogen",
+            "gemini-3.5-flash-lite",
+            "gemini-embedding-2"
+          ],
+          "title": "ModelId",
+          "type": "string"
+        },
+        "RejectionCategory": {
+          "enum": [
+            "COMPETITOR_LOCK_IN",
+            "TOO_SMALL",
+            "LAYOFFS_FREEZE",
+            "WRONG_PERSONA",
+            "NO_STACK_FIT",
+            "BUILT_IN_HOUSE",
+            "NO_URGENCY_SIGNAL"
+          ],
+          "title": "RejectionCategory",
+          "type": "string"
+        },
+        "SlayingLevel": {
+          "enum": [
+            "LENIENT",
+            "NORMAL",
+            "RUTHLESS"
+          ],
+          "title": "SlayingLevel",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "lead_id": {
+          "title": "Lead Id",
+          "type": "string"
+        },
+        "survived": {
+          "title": "Survived",
+          "type": "boolean"
+        },
+        "resurrected_by_user": {
+          "default": false,
+          "title": "Resurrected By User",
+          "type": "boolean"
+        },
+        "rejection_category": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RejectionCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "headline_tag": {
+          "title": "Headline Tag",
+          "type": "string"
+        },
+        "reasoning": {
+          "title": "Reasoning",
+          "type": "string"
+        },
+        "matched_icp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matched Icp Id"
+        },
+        "icp_similarity_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Icp Similarity Score",
+          "type": "number"
+        },
+        "anti_icp_similarity_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Anti Icp Similarity Score",
+          "type": "number"
+        },
+        "structural_match_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Structural Match Score",
+          "type": "number"
+        },
+        "qualification_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Qualification Score",
+          "type": "integer"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "slaying_level_applied": {
+          "$ref": "#/$defs/SlayingLevel"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "model_used": {
+          "$ref": "#/$defs/ModelId",
+          "default": "gemini-3.5-flash-lite"
+        }
+      },
+      "required": [
+        "lead_id",
+        "survived",
+        "headline_tag",
+        "reasoning",
+        "icp_similarity_score",
+        "anti_icp_similarity_score",
+        "structural_match_score",
+        "qualification_score",
+        "confidence",
+        "slaying_level_applied",
+        "latency_ms"
+      ],
+      "title": "SlayerVerdict",
+      "type": "object"
+    },
+    "EmailDraft": {
+      "properties": {
+        "lead_id": {
+          "title": "Lead Id",
+          "type": "string"
+        },
+        "recipient_name": {
+          "title": "Recipient Name",
+          "type": "string"
+        },
+        "recipient_email": {
+          "title": "Recipient Email",
+          "type": "string"
+        },
+        "company": {
+          "title": "Company",
+          "type": "string"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "cited_survival_signal": {
+          "title": "Cited Survival Signal",
+          "type": "string"
+        },
+        "email_evidence_phrase": {
+          "title": "Email Evidence Phrase",
+          "type": "string"
+        },
+        "matched_product_chunk": {
+          "title": "Matched Product Chunk",
+          "type": "string"
+        },
+        "personalization_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Personalization Score",
+          "type": "integer"
+        },
+        "approved": {
+          "default": true,
+          "title": "Approved",
+          "type": "boolean"
+        },
+        "status": {
+          "default": "DRAFTED",
+          "enum": [
+            "DRAFTED",
+            "SENT"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lead_id",
+        "recipient_name",
+        "recipient_email",
+        "company",
+        "subject",
+        "body",
+        "cited_survival_signal",
+        "email_evidence_phrase",
+        "matched_product_chunk",
+        "personalization_score"
+      ],
+      "title": "EmailDraft",
+      "type": "object"
+    },
+    "TelemetryMetrics": {
+      "properties": {
+        "total_leads": {
+          "default": 0,
+          "title": "Total Leads",
+          "type": "integer"
+        },
+        "processed_leads": {
+          "default": 0,
+          "title": "Processed Leads",
+          "type": "integer"
+        },
+        "killed_count": {
+          "default": 0,
+          "title": "Killed Count",
+          "type": "integer"
+        },
+        "survived_count": {
+          "default": 0,
+          "title": "Survived Count",
+          "type": "integer"
+        },
+        "kill_rate_pct": {
+          "default": 0.0,
+          "title": "Kill Rate Pct",
+          "type": "number"
+        },
+        "rejection_breakdown": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Rejection Breakdown",
+          "type": "object"
+        },
+        "model_calls": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Model Calls",
+          "type": "object"
+        },
+        "avg_slayer_latency_ms": {
+          "default": 0.0,
+          "title": "Avg Slayer Latency Ms",
+          "type": "number"
+        },
+        "elapsed_ms": {
+          "default": 0,
+          "title": "Elapsed Ms",
+          "type": "integer"
+        },
+        "estimated_saved_spam_hours": {
+          "default": 0.0,
+          "title": "Estimated Saved Spam Hours",
+          "type": "number"
+        }
+      },
+      "title": "TelemetryMetrics",
+      "type": "object"
+    },
+    "StreamEvent": {
+      "$defs": {
+        "StreamEventType": {
+          "enum": [
+            "phase_changed",
+            "agent_log",
+            "audit_completed",
+            "icps_generated",
+            "leads_loaded",
+            "lead_verdict",
+            "email_drafted",
+            "telemetry_update",
+            "pipeline_completed",
+            "pipeline_error"
+          ],
+          "title": "StreamEventType",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "event_id": {
+          "minimum": 1,
+          "title": "Event Id",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "timestamp_ms": {
+          "title": "Timestamp Ms",
+          "type": "integer"
+        },
+        "event_type": {
+          "$ref": "#/$defs/StreamEventType"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event_id",
+        "run_id",
+        "timestamp_ms",
+        "event_type"
+      ],
+      "title": "StreamEvent",
+      "type": "object"
+    },
+    "RunStateSnapshot": {
+      "$defs": {
+        "EmailDraft": {
+          "properties": {
+            "lead_id": {
+              "title": "Lead Id",
+              "type": "string"
+            },
+            "recipient_name": {
+              "title": "Recipient Name",
+              "type": "string"
+            },
+            "recipient_email": {
+              "title": "Recipient Email",
+              "type": "string"
+            },
+            "company": {
+              "title": "Company",
+              "type": "string"
+            },
+            "subject": {
+              "title": "Subject",
+              "type": "string"
+            },
+            "body": {
+              "title": "Body",
+              "type": "string"
+            },
+            "cited_survival_signal": {
+              "title": "Cited Survival Signal",
+              "type": "string"
+            },
+            "email_evidence_phrase": {
+              "title": "Email Evidence Phrase",
+              "type": "string"
+            },
+            "matched_product_chunk": {
+              "title": "Matched Product Chunk",
+              "type": "string"
+            },
+            "personalization_score": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Personalization Score",
+              "type": "integer"
+            },
+            "approved": {
+              "default": true,
+              "title": "Approved",
+              "type": "boolean"
+            },
+            "status": {
+              "default": "DRAFTED",
+              "enum": [
+                "DRAFTED",
+                "SENT"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead_id",
+            "recipient_name",
+            "recipient_email",
+            "company",
+            "subject",
+            "body",
+            "cited_survival_signal",
+            "email_evidence_phrase",
+            "matched_product_chunk",
+            "personalization_score"
+          ],
+          "title": "EmailDraft",
+          "type": "object"
+        },
+        "ExecutionMode": {
+          "enum": [
+            "LIVE",
+            "SAFE_REPLAY"
+          ],
+          "title": "ExecutionMode",
+          "type": "string"
+        },
+        "ICPProfile": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "target_roles": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Target Roles",
+              "type": "array"
+            },
+            "min_employees": {
+              "minimum": 1,
+              "title": "Min Employees",
+              "type": "integer"
+            },
+            "max_employees": {
+              "minimum": 1,
+              "title": "Max Employees",
+              "type": "integer"
+            },
+            "required_tech_signals": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Required Tech Signals",
+              "type": "array"
+            },
+            "buying_triggers": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Buying Triggers",
+              "type": "array"
+            },
+            "instant_disqualifiers": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Instant Disqualifiers",
+              "type": "array"
+            },
+            "vector_doc_id": {
+              "title": "Vector Doc Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "target_roles",
+            "min_employees",
+            "max_employees",
+            "required_tech_signals",
+            "buying_triggers",
+            "instant_disqualifiers",
+            "vector_doc_id"
+          ],
+          "title": "ICPProfile",
+          "type": "object"
+        },
+        "LeadRecord": {
+          "properties": {
+            "id": {
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "full_name": {
+              "minLength": 1,
+              "title": "Full Name",
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "title": "Role",
+              "type": "string"
+            },
+            "company": {
+              "minLength": 1,
+              "title": "Company",
+              "type": "string"
+            },
+            "domain": {
+              "minLength": 1,
+              "title": "Domain",
+              "type": "string"
+            },
+            "industry": {
+              "minLength": 1,
+              "title": "Industry",
+              "type": "string"
+            },
+            "employee_count": {
+              "minimum": 1,
+              "title": "Employee Count",
+              "type": "integer"
+            },
+            "funding_stage": {
+              "minLength": 1,
+              "title": "Funding Stage",
+              "type": "string"
+            },
+            "tech_stack": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Tech Stack",
+              "type": "array"
+            },
+            "recent_signal": {
+              "default": "",
+              "title": "Recent Signal",
+              "type": "string"
+            },
+            "bio_snippet": {
+              "default": "",
+              "title": "Bio Snippet",
+              "type": "string"
+            },
+            "email": {
+              "minLength": 3,
+              "title": "Email",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "full_name",
+            "role",
+            "company",
+            "domain",
+            "industry",
+            "employee_count",
+            "funding_stage",
+            "email"
+          ],
+          "title": "LeadRecord",
+          "type": "object"
+        },
+        "MarketAuditResult": {
+          "properties": {
+            "market_reality_summary": {
+              "title": "Market Reality Summary",
+              "type": "string"
+            },
+            "founder_blind_spots": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Founder Blind Spots",
+              "type": "array"
+            },
+            "sharpened_value_prop": {
+              "title": "Sharpened Value Prop",
+              "type": "string"
+            },
+            "anti_icp_red_flags": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Anti Icp Red Flags",
+              "type": "array"
+            },
+            "market_readiness_score": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Market Readiness Score",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "market_reality_summary",
+            "founder_blind_spots",
+            "sharpened_value_prop",
+            "anti_icp_red_flags",
+            "market_readiness_score"
+          ],
+          "title": "MarketAuditResult",
+          "type": "object"
+        },
+        "ModelId": {
+          "enum": [
+            "gemini-4-hydrogen",
+            "gemini-3.5-flash-lite",
+            "gemini-embedding-2"
+          ],
+          "title": "ModelId",
+          "type": "string"
+        },
+        "PipelinePhase": {
+          "enum": [
+            "IDLE",
+            "AUDITING",
+            "ICP_GENERATION",
+            "HUNTING",
+            "SLAYING",
+            "SNIPING",
+            "READY",
+            "DISPATCHED",
+            "ERROR"
+          ],
+          "title": "PipelinePhase",
+          "type": "string"
+        },
+        "RejectionCategory": {
+          "enum": [
+            "COMPETITOR_LOCK_IN",
+            "TOO_SMALL",
+            "LAYOFFS_FREEZE",
+            "WRONG_PERSONA",
+            "NO_STACK_FIT",
+            "BUILT_IN_HOUSE",
+            "NO_URGENCY_SIGNAL"
+          ],
+          "title": "RejectionCategory",
+          "type": "string"
+        },
+        "SlayerVerdict": {
+          "properties": {
+            "lead_id": {
+              "title": "Lead Id",
+              "type": "string"
+            },
+            "survived": {
+              "title": "Survived",
+              "type": "boolean"
+            },
+            "resurrected_by_user": {
+              "default": false,
+              "title": "Resurrected By User",
+              "type": "boolean"
+            },
+            "rejection_category": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RejectionCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "headline_tag": {
+              "title": "Headline Tag",
+              "type": "string"
+            },
+            "reasoning": {
+              "title": "Reasoning",
+              "type": "string"
+            },
+            "matched_icp_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Matched Icp Id"
+            },
+            "icp_similarity_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Icp Similarity Score",
+              "type": "number"
+            },
+            "anti_icp_similarity_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Anti Icp Similarity Score",
+              "type": "number"
+            },
+            "structural_match_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Structural Match Score",
+              "type": "number"
+            },
+            "qualification_score": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Qualification Score",
+              "type": "integer"
+            },
+            "confidence": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Confidence",
+              "type": "number"
+            },
+            "slaying_level_applied": {
+              "$ref": "#/$defs/SlayingLevel"
+            },
+            "latency_ms": {
+              "minimum": 0,
+              "title": "Latency Ms",
+              "type": "integer"
+            },
+            "model_used": {
+              "$ref": "#/$defs/ModelId",
+              "default": "gemini-3.5-flash-lite"
+            }
+          },
+          "required": [
+            "lead_id",
+            "survived",
+            "headline_tag",
+            "reasoning",
+            "icp_similarity_score",
+            "anti_icp_similarity_score",
+            "structural_match_score",
+            "qualification_score",
+            "confidence",
+            "slaying_level_applied",
+            "latency_ms"
+          ],
+          "title": "SlayerVerdict",
+          "type": "object"
+        },
+        "SlayingLevel": {
+          "enum": [
+            "LENIENT",
+            "NORMAL",
+            "RUTHLESS"
+          ],
+          "title": "SlayingLevel",
+          "type": "string"
+        },
+        "StartupInput": {
+          "properties": {
+            "product_name": {
+              "minLength": 2,
+              "title": "Product Name",
+              "type": "string"
+            },
+            "product_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Product Url"
+            },
+            "description": {
+              "minLength": 20,
+              "title": "Description",
+              "type": "string"
+            },
+            "founder_assumptions": {
+              "minLength": 5,
+              "title": "Founder Assumptions",
+              "type": "string"
+            },
+            "slaying_level": {
+              "$ref": "#/$defs/SlayingLevel",
+              "default": "RUTHLESS"
+            },
+            "execution_mode": {
+              "$ref": "#/$defs/ExecutionMode",
+              "default": "LIVE"
+            },
+            "leads": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/LeadRecord"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Leads"
+            }
+          },
+          "required": [
+            "product_name",
+            "description",
+            "founder_assumptions"
+          ],
+          "title": "StartupInput",
+          "type": "object"
+        },
+        "TelemetryMetrics": {
+          "properties": {
+            "total_leads": {
+              "default": 0,
+              "title": "Total Leads",
+              "type": "integer"
+            },
+            "processed_leads": {
+              "default": 0,
+              "title": "Processed Leads",
+              "type": "integer"
+            },
+            "killed_count": {
+              "default": 0,
+              "title": "Killed Count",
+              "type": "integer"
+            },
+            "survived_count": {
+              "default": 0,
+              "title": "Survived Count",
+              "type": "integer"
+            },
+            "kill_rate_pct": {
+              "default": 0.0,
+              "title": "Kill Rate Pct",
+              "type": "number"
+            },
+            "rejection_breakdown": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Rejection Breakdown",
+              "type": "object"
+            },
+            "model_calls": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Model Calls",
+              "type": "object"
+            },
+            "avg_slayer_latency_ms": {
+              "default": 0.0,
+              "title": "Avg Slayer Latency Ms",
+              "type": "number"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "estimated_saved_spam_hours": {
+              "default": 0.0,
+              "title": "Estimated Saved Spam Hours",
+              "type": "number"
+            }
+          },
+          "title": "TelemetryMetrics",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/PipelinePhase"
+        },
+        "startup_input": {
+          "$ref": "#/$defs/StartupInput"
+        },
+        "market_audit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarketAuditResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "icps": {
+          "items": {
+            "$ref": "#/$defs/ICPProfile"
+          },
+          "title": "Icps",
+          "type": "array"
+        },
+        "leads": {
+          "items": {
+            "$ref": "#/$defs/LeadRecord"
+          },
+          "title": "Leads",
+          "type": "array"
+        },
+        "verdicts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SlayerVerdict"
+          },
+          "title": "Verdicts",
+          "type": "object"
+        },
+        "emails": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EmailDraft"
+          },
+          "title": "Emails",
+          "type": "object"
+        },
+        "telemetry": {
+          "$ref": "#/$defs/TelemetryMetrics"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        }
+      },
+      "required": [
+        "run_id",
+        "phase",
+        "startup_input"
+      ],
+      "title": "RunStateSnapshot",
+      "type": "object"
+    },
+    "HealthResponse": {
+      "properties": {
+        "status": {
+          "const": "ok",
+          "default": "ok",
+          "title": "Status",
+          "type": "string"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Models",
+          "type": "object"
+        },
+        "default_demo_ready": {
+          "title": "Default Demo Ready",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "models",
+        "default_demo_ready"
+      ],
+      "title": "HealthResponse",
+      "type": "object"
+    },
+    "PresetResponse": {
+      "$defs": {
+        "ExecutionMode": {
+          "enum": [
+            "LIVE",
+            "SAFE_REPLAY"
+          ],
+          "title": "ExecutionMode",
+          "type": "string"
+        },
+        "LeadRecord": {
+          "properties": {
+            "id": {
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "full_name": {
+              "minLength": 1,
+              "title": "Full Name",
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "title": "Role",
+              "type": "string"
+            },
+            "company": {
+              "minLength": 1,
+              "title": "Company",
+              "type": "string"
+            },
+            "domain": {
+              "minLength": 1,
+              "title": "Domain",
+              "type": "string"
+            },
+            "industry": {
+              "minLength": 1,
+              "title": "Industry",
+              "type": "string"
+            },
+            "employee_count": {
+              "minimum": 1,
+              "title": "Employee Count",
+              "type": "integer"
+            },
+            "funding_stage": {
+              "minLength": 1,
+              "title": "Funding Stage",
+              "type": "string"
+            },
+            "tech_stack": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Tech Stack",
+              "type": "array"
+            },
+            "recent_signal": {
+              "default": "",
+              "title": "Recent Signal",
+              "type": "string"
+            },
+            "bio_snippet": {
+              "default": "",
+              "title": "Bio Snippet",
+              "type": "string"
+            },
+            "email": {
+              "minLength": 3,
+              "title": "Email",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "full_name",
+            "role",
+            "company",
+            "domain",
+            "industry",
+            "employee_count",
+            "funding_stage",
+            "email"
+          ],
+          "title": "LeadRecord",
+          "type": "object"
+        },
+        "SlayingLevel": {
+          "enum": [
+            "LENIENT",
+            "NORMAL",
+            "RUTHLESS"
+          ],
+          "title": "SlayingLevel",
+          "type": "string"
+        },
+        "StartupInput": {
+          "properties": {
+            "product_name": {
+              "minLength": 2,
+              "title": "Product Name",
+              "type": "string"
+            },
+            "product_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Product Url"
+            },
+            "description": {
+              "minLength": 20,
+              "title": "Description",
+              "type": "string"
+            },
+            "founder_assumptions": {
+              "minLength": 5,
+              "title": "Founder Assumptions",
+              "type": "string"
+            },
+            "slaying_level": {
+              "$ref": "#/$defs/SlayingLevel",
+              "default": "RUTHLESS"
+            },
+            "execution_mode": {
+              "$ref": "#/$defs/ExecutionMode",
+              "default": "LIVE"
+            },
+            "leads": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/LeadRecord"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Leads"
+            }
+          },
+          "required": [
+            "product_name",
+            "description",
+            "founder_assumptions"
+          ],
+          "title": "StartupInput",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "startup": {
+          "$ref": "#/$defs/StartupInput"
+        },
+        "leads": {
+          "items": {
+            "$ref": "#/$defs/LeadRecord"
+          },
+          "title": "Leads",
+          "type": "array"
+        }
+      },
+      "required": [
+        "startup",
+        "leads"
+      ],
+      "title": "PresetResponse",
+      "type": "object"
+    },
+    "ParseCsvResponse": {
+      "$defs": {
+        "LeadRecord": {
+          "properties": {
+            "id": {
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "full_name": {
+              "minLength": 1,
+              "title": "Full Name",
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "title": "Role",
+              "type": "string"
+            },
+            "company": {
+              "minLength": 1,
+              "title": "Company",
+              "type": "string"
+            },
+            "domain": {
+              "minLength": 1,
+              "title": "Domain",
+              "type": "string"
+            },
+            "industry": {
+              "minLength": 1,
+              "title": "Industry",
+              "type": "string"
+            },
+            "employee_count": {
+              "minimum": 1,
+              "title": "Employee Count",
+              "type": "integer"
+            },
+            "funding_stage": {
+              "minLength": 1,
+              "title": "Funding Stage",
+              "type": "string"
+            },
+            "tech_stack": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Tech Stack",
+              "type": "array"
+            },
+            "recent_signal": {
+              "default": "",
+              "title": "Recent Signal",
+              "type": "string"
+            },
+            "bio_snippet": {
+              "default": "",
+              "title": "Bio Snippet",
+              "type": "string"
+            },
+            "email": {
+              "minLength": 3,
+              "title": "Email",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "full_name",
+            "role",
+            "company",
+            "domain",
+            "industry",
+            "employee_count",
+            "funding_stage",
+            "email"
+          ],
+          "title": "LeadRecord",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "leads": {
+          "items": {
+            "$ref": "#/$defs/LeadRecord"
+          },
+          "title": "Leads",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "count",
+        "leads"
+      ],
+      "title": "ParseCsvResponse",
+      "type": "object"
+    },
+    "PipelineStartResponse": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "stream_url": {
+          "title": "Stream Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "stream_url"
+      ],
+      "title": "PipelineStartResponse",
+      "type": "object"
+    },
+    "ResurrectResponse": {
+      "$defs": {
+        "EmailDraft": {
+          "properties": {
+            "lead_id": {
+              "title": "Lead Id",
+              "type": "string"
+            },
+            "recipient_name": {
+              "title": "Recipient Name",
+              "type": "string"
+            },
+            "recipient_email": {
+              "title": "Recipient Email",
+              "type": "string"
+            },
+            "company": {
+              "title": "Company",
+              "type": "string"
+            },
+            "subject": {
+              "title": "Subject",
+              "type": "string"
+            },
+            "body": {
+              "title": "Body",
+              "type": "string"
+            },
+            "cited_survival_signal": {
+              "title": "Cited Survival Signal",
+              "type": "string"
+            },
+            "email_evidence_phrase": {
+              "title": "Email Evidence Phrase",
+              "type": "string"
+            },
+            "matched_product_chunk": {
+              "title": "Matched Product Chunk",
+              "type": "string"
+            },
+            "personalization_score": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Personalization Score",
+              "type": "integer"
+            },
+            "approved": {
+              "default": true,
+              "title": "Approved",
+              "type": "boolean"
+            },
+            "status": {
+              "default": "DRAFTED",
+              "enum": [
+                "DRAFTED",
+                "SENT"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead_id",
+            "recipient_name",
+            "recipient_email",
+            "company",
+            "subject",
+            "body",
+            "cited_survival_signal",
+            "email_evidence_phrase",
+            "matched_product_chunk",
+            "personalization_score"
+          ],
+          "title": "EmailDraft",
+          "type": "object"
+        },
+        "ModelId": {
+          "enum": [
+            "gemini-4-hydrogen",
+            "gemini-3.5-flash-lite",
+            "gemini-embedding-2"
+          ],
+          "title": "ModelId",
+          "type": "string"
+        },
+        "RejectionCategory": {
+          "enum": [
+            "COMPETITOR_LOCK_IN",
+            "TOO_SMALL",
+            "LAYOFFS_FREEZE",
+            "WRONG_PERSONA",
+            "NO_STACK_FIT",
+            "BUILT_IN_HOUSE",
+            "NO_URGENCY_SIGNAL"
+          ],
+          "title": "RejectionCategory",
+          "type": "string"
+        },
+        "SlayerVerdict": {
+          "properties": {
+            "lead_id": {
+              "title": "Lead Id",
+              "type": "string"
+            },
+            "survived": {
+              "title": "Survived",
+              "type": "boolean"
+            },
+            "resurrected_by_user": {
+              "default": false,
+              "title": "Resurrected By User",
+              "type": "boolean"
+            },
+            "rejection_category": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RejectionCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "headline_tag": {
+              "title": "Headline Tag",
+              "type": "string"
+            },
+            "reasoning": {
+              "title": "Reasoning",
+              "type": "string"
+            },
+            "matched_icp_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Matched Icp Id"
+            },
+            "icp_similarity_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Icp Similarity Score",
+              "type": "number"
+            },
+            "anti_icp_similarity_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Anti Icp Similarity Score",
+              "type": "number"
+            },
+            "structural_match_score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Structural Match Score",
+              "type": "number"
+            },
+            "qualification_score": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Qualification Score",
+              "type": "integer"
+            },
+            "confidence": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Confidence",
+              "type": "number"
+            },
+            "slaying_level_applied": {
+              "$ref": "#/$defs/SlayingLevel"
+            },
+            "latency_ms": {
+              "minimum": 0,
+              "title": "Latency Ms",
+              "type": "integer"
+            },
+            "model_used": {
+              "$ref": "#/$defs/ModelId",
+              "default": "gemini-3.5-flash-lite"
+            }
+          },
+          "required": [
+            "lead_id",
+            "survived",
+            "headline_tag",
+            "reasoning",
+            "icp_similarity_score",
+            "anti_icp_similarity_score",
+            "structural_match_score",
+            "qualification_score",
+            "confidence",
+            "slaying_level_applied",
+            "latency_ms"
+          ],
+          "title": "SlayerVerdict",
+          "type": "object"
+        },
+        "SlayingLevel": {
+          "enum": [
+            "LENIENT",
+            "NORMAL",
+            "RUTHLESS"
+          ],
+          "title": "SlayingLevel",
+          "type": "string"
+        },
+        "TelemetryMetrics": {
+          "properties": {
+            "total_leads": {
+              "default": 0,
+              "title": "Total Leads",
+              "type": "integer"
+            },
+            "processed_leads": {
+              "default": 0,
+              "title": "Processed Leads",
+              "type": "integer"
+            },
+            "killed_count": {
+              "default": 0,
+              "title": "Killed Count",
+              "type": "integer"
+            },
+            "survived_count": {
+              "default": 0,
+              "title": "Survived Count",
+              "type": "integer"
+            },
+            "kill_rate_pct": {
+              "default": 0.0,
+              "title": "Kill Rate Pct",
+              "type": "number"
+            },
+            "rejection_breakdown": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Rejection Breakdown",
+              "type": "object"
+            },
+            "model_calls": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Model Calls",
+              "type": "object"
+            },
+            "avg_slayer_latency_ms": {
+              "default": 0.0,
+              "title": "Avg Slayer Latency Ms",
+              "type": "number"
+            },
+            "elapsed_ms": {
+              "default": 0,
+              "title": "Elapsed Ms",
+              "type": "integer"
+            },
+            "estimated_saved_spam_hours": {
+              "default": 0.0,
+              "title": "Estimated Saved Spam Hours",
+              "type": "number"
+            }
+          },
+          "title": "TelemetryMetrics",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "verdict": {
+          "$ref": "#/$defs/SlayerVerdict"
+        },
+        "email_draft": {
+          "$ref": "#/$defs/EmailDraft"
+        },
+        "telemetry": {
+          "$ref": "#/$defs/TelemetryMetrics"
+        }
+      },
+      "required": [
+        "verdict",
+        "email_draft",
+        "telemetry"
+      ],
+      "title": "ResurrectResponse",
+      "type": "object"
+    },
+    "DispatchRequest": {
+      "properties": {
+        "lead_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lead Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "lead_ids"
+      ],
+      "title": "DispatchRequest",
+      "type": "object"
+    },
+    "DispatchResponse": {
+      "$defs": {
+        "DispatchReceipt": {
+          "properties": {
+            "lead_id": {
+              "title": "Lead Id",
+              "type": "string"
+            },
+            "recipient_email": {
+              "title": "Recipient Email",
+              "type": "string"
+            },
+            "status": {
+              "const": "SENT",
+              "default": "SENT",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead_id",
+            "recipient_email"
+          ],
+          "title": "DispatchReceipt",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "dispatched_count": {
+          "title": "Dispatched Count",
+          "type": "integer"
+        },
+        "sent_at": {
+          "title": "Sent At",
+          "type": "string"
+        },
+        "receipts": {
+          "items": {
+            "$ref": "#/$defs/DispatchReceipt"
+          },
+          "title": "Receipts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dispatched_count",
+        "sent_at",
+        "receipts"
+      ],
+      "title": "DispatchResponse",
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+[project]
+name = "leadslayer-backend"
+version = "0.1.0"
+description = "LeadSlayer AI: Autonomous GTM Engine Backend (FastAPI + Google ADK 2.0)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"

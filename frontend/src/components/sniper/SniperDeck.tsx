@@ -24,7 +24,7 @@ export function SniperDeck() {
       : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400">

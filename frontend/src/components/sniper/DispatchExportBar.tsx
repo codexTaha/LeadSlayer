@@ -137,12 +137,12 @@ export function DispatchExportBar() {
 
   return (
     <>
-      <div className="sticky bottom-4 z-20 rounded-2xl border border-emerald-400/35 bg-[#1B2623]/95 p-4 shadow-[0_18px_46px_rgba(0,0,0,0.5)] backdrop-blur-md space-y-2.5">
+      <div className="sticky bottom-4 z-30 rounded-2xl border-2 border-emerald-400/75 bg-[#10241E] p-4 sm:p-5 shadow-[0_-10px_42px_rgba(0,0,0,0.85),0_0_32px_rgba(16,185,129,0.22)] ring-1 ring-emerald-300/20 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {allSent || phase === "DISPATCHED" ? (
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              <div className="flex items-center gap-2 text-base font-bold text-emerald-200">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
                 Campaign Dispatched via{" "}
                 {lastResult?.delivery_mode || deliveryMode} —{" "}
                 {lastResult?.dispatched_count ?? approvedDrafts.length} Sent
@@ -150,32 +150,40 @@ export function DispatchExportBar() {
                   ` · ${lastResult?.blocked_count} Blocked by Deliverability Gate`}
               </div>
             ) : (
-              <div className="text-sm text-zinc-200">
-                <span className="font-mono font-bold text-emerald-400">
-                  {approvedDrafts.length}
-                </span>{" "}
-                of {allDrafts.length} Survivor Emails Approved for Dispatch
+              <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-white">
+                <span className="inline-flex items-center rounded-md border border-emerald-400/60 bg-emerald-500/25 px-2 py-0.5 font-mono text-sm font-bold text-emerald-200">
+                  {approvedDrafts.length} / {allDrafts.length}
+                </span>
+                <span>Survivor Emails Approved for Dispatch</span>
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-zinc-400">
-              <span className="text-emerald-400">Deliverability Gate Active</span>
-              <span>·</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-stone-200">
+              <span className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                Deliverability Gate Active
+              </span>
+              <span className="text-stone-500">·</span>
               <span>
                 SMTP:{" "}
-                {mailStatus?.smtp_configured
-                  ? `Connected (${mailStatus.smtp_sender || "Ready"})`
-                  : "Not connected"}
+                <span className="text-stone-100">
+                  {mailStatus?.smtp_configured
+                    ? `Connected (${mailStatus.smtp_sender || "Ready"})`
+                    : "Not connected"}
+                </span>
               </span>
-              <span>·</span>
+              <span className="text-stone-500">·</span>
               <span>
-                Gmail OAuth: {mailStatus?.gmail_configured ? "Connected" : "Not linked"}
+                Gmail OAuth:{" "}
+                <span className="text-stone-100">
+                  {mailStatus?.gmail_configured ? "Connected" : "Not linked"}
+                </span>
               </span>
               {telemetry && (
                 <>
-                  <span>·</span>
-                  <span className="inline-flex items-center gap-1 text-amber-300">
-                    <Clock className="h-3 w-3" />
+                  <span className="text-stone-500">·</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-amber-300">
+                    <Clock className="h-3.5 w-3.5" />
                     {telemetry.estimated_saved_spam_hours} hrs saved
                   </span>
                 </>
@@ -190,10 +198,10 @@ export function DispatchExportBar() {
                 setMailModalError(null);
                 setShowMailModal(true);
               }}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-medium transition cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition cursor-pointer ${
                 mailStatus?.smtp_configured || mailStatus?.gmail_configured
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
-                  : "border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20"
+                  ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                  : "border-indigo-400/60 bg-indigo-500/20 text-indigo-100 hover:bg-indigo-500/30"
               }`}
             >
               <Mail className="h-3.5 w-3.5" />
@@ -207,7 +215,7 @@ export function DispatchExportBar() {
               disabled={isSending || allSent}
               onChange={(e) => setDeliveryMode(e.target.value as DeliveryMode)}
               aria-label="Email Delivery Transport"
-              className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-xs font-mono text-zinc-200 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              className="rounded-xl border border-stone-500/70 bg-[#182E28] px-3 py-2.5 text-xs font-mono font-medium text-stone-100 focus:border-emerald-400 focus:outline-none disabled:opacity-50"
             >
               <option value="SANDBOX">Safe Sandbox ($0 Demo)</option>
               <option value="SMTP">
@@ -221,18 +229,18 @@ export function DispatchExportBar() {
             <a
               href={getExportUrl(runId, "csv")}
               download
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-semibold text-emerald-200 hover:border-emerald-400 hover:bg-emerald-500/20 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/65 bg-emerald-500/20 px-3.5 py-2.5 text-xs font-semibold text-emerald-100 hover:border-emerald-300 hover:bg-emerald-500/30 transition"
             >
-              <Download className="h-3.5 w-3.5 text-emerald-400" />
+              <Download className="h-3.5 w-3.5 text-emerald-300" />
               Download Verified Leads (.CSV)
             </a>
 
             <a
               href={getExportUrl(runId, "json")}
               download
-              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-400/50 bg-rose-500/15 px-3.5 py-2.5 text-xs font-semibold text-rose-100 hover:border-rose-300 hover:bg-rose-500/25 transition"
             >
-              <Download className="h-3.5 w-3.5 text-rose-400" />
+              <Download className="h-3.5 w-3.5 text-rose-300" />
               Kill Audit (.JSON)
             </a>
 
@@ -240,7 +248,7 @@ export function DispatchExportBar() {
               type="button"
               disabled={isSending || approvedDrafts.length === 0 || allSent}
               onClick={handleDispatch}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-emerald-400 transition cursor-pointer disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-5 py-2.5 text-sm font-bold text-zinc-950 shadow-[0_0_26px_rgba(16,185,129,0.45)] hover:from-emerald-400 hover:to-teal-300 transition cursor-pointer disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
             >
               {isSending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

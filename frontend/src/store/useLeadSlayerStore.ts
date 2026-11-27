@@ -26,7 +26,7 @@ const DEFAULT_STARTUP_INPUT: StartupInput = {
   product_url: "",
   description: "",
   founder_assumptions: "",
-  slaying_level: "RUTHLESS",
+  slaying_level: "NORMAL",
   execution_mode: "LIVE",
   leads: null,
   lead_sources: ["AI_SEARCH", "LINKEDIN_SEARCH"],

@@ -23,6 +23,7 @@ import { ICPCardsGrid } from "@/components/audit/ICPCardsGrid";
 import { MarketAuditCard } from "@/components/audit/MarketAuditCard";
 import { SlayingLevelSelector } from "@/components/audit/SlayingLevelSelector";
 import { fetchSavedExports, parseCsvLeads } from "@/lib/api";
+import { SLAYING_LEVELS } from "@/lib/constants";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 import type { LeadSourceType, SavedExportSummary } from "@/types/contracts";
 
@@ -117,7 +118,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
             </span>
             <span className="text-zinc-600">·</span>
             <span className="font-mono text-zinc-400">
-              {startupInput.slaying_level} Mode
+              {SLAYING_LEVELS[startupInput.slaying_level].label} Mode
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -468,7 +469,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                 {phase === "IDLE"
                   ? `Ready · ${startupInput.product_name || "Custom Product"} · ${
                       leadOrder.length > 0 ? `${leadOrder.length} Leads` : "Live Discovery"
-                    } · ${startupInput.slaying_level}`
+                    } · ${SLAYING_LEVELS[startupInput.slaying_level].label}`
                   : `Pipeline active: ${phase}`}
               </span>
             </div>

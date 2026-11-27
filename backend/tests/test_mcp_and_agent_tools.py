@@ -377,3 +377,37 @@ async def test_mcp_campaign_and_selective_dispatch_simulation_fallback(tmp_path:
         assert {"domain", "email_status", "mx_provider", "source_channel"}.issubset(rows[0].keys())
         dispatched_rows = [r for r in rows if r["lead_id"] in disp_res["selected_lead_ids"]]
         assert all(r["dispatch_status"] == "SENT" for r in dispatched_rows)
+
+
+async def test_mcp_streamable_http_endpoint_initializes_and_lists_all_tools() -> None:
+    import httpx2
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    from app.main import lifespan
+
+    expected_tools = {
+        "run_leadslayer_campaign",
+        "dispatch_campaign_emails",
+        "check_and_update_dnc_crm",
+        "schedule_followup_reminder",
+        "stage_or_dispatch_email_mcp",
+        "save_campaign_artifacts",
+    }
+
+    async with lifespan(app):
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app),
+            base_url="https://leadslayer.onrender.com",
+            headers={"Host": "leadslayer.onrender.com"},
+        ) as http_client:
+            async with streamable_http_client(
+                "https://leadslayer.onrender.com/mcp",
+                http_client=http_client,
+            ) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    init_res = await session.initialize()
+                    assert init_res.server_info.name == "leadslayer-ops-mcp"
+                    tools_res = await session.list_tools()
+                    names = {t.name for t in tools_res.tools}
+                    assert expected_tools.issubset(names)

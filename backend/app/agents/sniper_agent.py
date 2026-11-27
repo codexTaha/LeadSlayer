@@ -167,12 +167,6 @@ async def execute_sniper_swarm(
 
     memory_store = memory_registry.get(run_id)
     icp_by_id = {icp.id: icp for icp in icps}
-    genai_client = client or genai.Client(
-        api_key=key_rotator.next_key(),
-        http_options=genai.types.HttpOptions(
-            retry_options=genai.types.HttpRetryOptions(attempts=1)
-        ),
-    )
 
     batches = [
         survivors[i : i + batch_size]
@@ -180,6 +174,18 @@ async def execute_sniper_swarm(
     ]
 
     async def _draft_batch(batch: list[LeadRecord]) -> list[EmailDraft]:
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            batch_client = genai.Client(
+                api_key=active_key,
+                http_options=genai.types.HttpOptions(
+                    retry_options=genai.types.HttpRetryOptions(attempts=1)
+                ),
+            )
+        else:
+            batch_client = client
+
         prepared: list[tuple[LeadRecord, str, str]] = []
         lead_blocks: list[str] = []
         for lead in batch:
@@ -205,16 +211,23 @@ async def execute_sniper_swarm(
             f"(return all {len(batch)} drafts in `drafts` keyed by `lead_id`):\n\n"
             + "\n\n".join(lead_blocks)
         )
-        response = await genai_client.aio.models.generate_content(
-            model=settings.gemini_brain_model,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=SNIPER_SYSTEM_PROMPT,
-                temperature=0.35,
-                response_mime_type="application/json",
-                response_schema=SniperBatchLLMResponse,
-            ),
-        )
+        try:
+            response = await batch_client.aio.models.generate_content(
+                model=settings.gemini_brain_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=SNIPER_SYSTEM_PROMPT,
+                    temperature=0.35,
+                    response_mime_type="application/json",
+                    response_schema=SniperBatchLLMResponse,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
         parsed = SniperBatchLLMResponse.model_validate_json(response.text or "{}")
         by_id = {d.lead_id: d for d in parsed.drafts}
 
@@ -226,7 +239,7 @@ async def execute_sniper_swarm(
                 icp = icp_by_id.get(verdicts[lead.id].matched_icp_id or "", icps[0])
                 results.append(
                     await draft_email_for_lead(
-                        memory_store, lead, verdicts[lead.id], icp, client=genai_client
+                        memory_store, lead, verdicts[lead.id], icp, client=batch_client
                     )
                 )
                 continue

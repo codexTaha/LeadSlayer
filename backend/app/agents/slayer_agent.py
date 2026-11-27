@@ -124,14 +124,19 @@ async def execute_slayer_swarm(
         + "\n\nEvaluate EVERY lead in the batch independently and return one verdict per `lead_id` in `verdicts`."
     )
 
-    genai_client = client or genai.Client(
-        api_key=key_rotator.next_key(),
-        http_options=genai.types.HttpOptions(
-            retry_options=genai.types.HttpRetryOptions(attempts=1)
-        ),
-    )
-
     async def _evaluate_batch(batch: list[LeadRecord]) -> list[SlayerVerdict]:
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            batch_client = genai.Client(
+                api_key=active_key,
+                http_options=genai.types.HttpOptions(
+                    retry_options=genai.types.HttpRetryOptions(attempts=1)
+                ),
+            )
+        else:
+            batch_client = client
+
         leads_block = "\n\n".join(
             _format_lead_for_slayer(lead, priors[lead.id]) for lead in batch
         )
@@ -142,16 +147,23 @@ async def execute_slayer_swarm(
         )
 
         t0 = time.perf_counter()
-        response = await genai_client.aio.models.generate_content(
-            model=settings.gemini_workhorse_model,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.1,
-                response_mime_type="application/json",
-                response_schema=SlayerBatchLLMResponse,
-            ),
-        )
+        try:
+            response = await batch_client.aio.models.generate_content(
+                model=settings.gemini_workhorse_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                    response_schema=SlayerBatchLLMResponse,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
         per_lead_ms = max(1, int(((time.perf_counter() - t0) * 1000) / len(batch)))
         parsed = SlayerBatchLLMResponse.model_validate_json(response.text or "{}")
 

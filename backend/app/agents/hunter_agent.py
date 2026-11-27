@@ -18,6 +18,7 @@ from app.agents.structured_outputs import (
     DiscoveredLeadCandidate,
     EnrichedLeadBatch,
     HuntQueriesOutput,
+    WebSearchQueriesOutput,
 )
 from app.config import settings
 from app.harvey_bridge.research import (
@@ -26,6 +27,7 @@ from app.harvey_bridge.research import (
     research_company_with_harvey,
     search_linkedin_via_harvey_browser,
 )
+from app.harvey_bridge.web_index import has_live_web_index, query_live_web_index
 from app.memory.exceptions import is_transient_api_error
 from app.memory.registry import memory_registry
 from app.memory.vector_store import HybridMatchContext
@@ -59,71 +61,194 @@ def _is_directory_or_self_domain(domain: str, own_domain: str) -> bool:
     return is_junk_or_self_domain(domain, own_domain)
 
 
-async def _run_grounded_gemini_search(
-    prompt: str,
-    client: Any | None = None,
-) -> tuple[str, list[str], bool]:
-    _api_key = key_rotator.next_key()
-    genai_client = client or genai.Client(
-        api_key=_api_key,
+def _new_genai_client(api_key: str) -> genai.Client:
+    return genai.Client(
+        api_key=api_key,
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),
     )
 
-    if client is None:
-        search_models: list[tuple[str, bool]] = [
-            ("gemini-2.5-flash", True),
-            ("gemini-3.8-flash", True),
-            (settings.gemini_brain_model, True),
-            (settings.gemini_workhorse_model, False),
-        ]
+
+async def _synthesize_live_web_queries(
+    startup: StartupInput,
+    icps: list[ICPProfile],
+    mode: str,
+    desired_queries: int,
+    client: Any | None = None,
+) -> list[str]:
+    """Generates clean, high-signal web or LinkedIn X-Ray search strings for our web index."""
+    icp_summary = "\n".join(
+        f"- {icp.name}: roles={icp.target_roles[:4]}, tech={icp.required_tech_signals[:4]}, triggers={icp.buying_triggers[:3]}"
+        for icp in icps
+    )
+    if mode == "LINKEDIN":
+        sys_msg = (
+            f"Generate {desired_queries} Google X-Ray search queries targeting `site:linkedin.com/in/` "
+            "for real B2B decision-makers matching the ICPs. Each query MUST start with `site:linkedin.com/in/` "
+            "and combine target job titles with relevant industry/tech keywords."
+        )
     else:
-        search_models = [(settings.gemini_workhorse_model, False)]
+        sys_msg = (
+            f"Generate {desired_queries} crisp Google search queries to discover real mid-market operating B2B/B2C companies "
+            "(20-300 employees) matching the ICPs and buying signals. Append `-site:linkedin.com -site:crunchbase.com -site:g2.com -site:wikipedia.org` "
+            "so results point to company websites, announcements, press releases, or engineering blogs."
+        )
+
+    attempts = max(2, key_rotator.pool_size) if client is None else 1
+    for _ in range(attempts):
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            genai_client = _new_genai_client(active_key)
+        else:
+            genai_client = client
+        try:
+            resp = await genai_client.aio.models.generate_content(
+                model=settings.gemini_workhorse_model,
+                contents=(
+                    f"Product: {startup.product_name} ({startup.product_url or 'N/A'})\n"
+                    f"Description: {startup.description}\n"
+                    f"Target ICPs:\n{icp_summary}"
+                ),
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=sys_msg,
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=WebSearchQueriesOutput,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+            parsed = WebSearchQueriesOutput.model_validate_json(resp.text or "{}")
+            clean = [q.strip() for q in parsed.queries if q and q.strip()]
+            if clean:
+                return clean[:desired_queries]
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            continue
+
+    # Deterministic fallback queries if synthesis fails
+    first_icp = icps[0] if icps else None
+    roles = " OR ".join(f'"{r}"' for r in (first_icp.target_roles[:2] if first_icp else ["VP Engineering"]))
+    tech = " OR ".join(f'"{t}"' for t in (first_icp.required_tech_signals[:2] if first_icp else ["SaaS"]))
+    if mode == "LINKEDIN":
+        return [f"site:linkedin.com/in/ ({roles}) ({tech})"]
+    return [f'({tech}) ({startup.product_name} OR B2B SaaS) hiring OR expansion -site:linkedin.com -site:crunchbase.com']
+
+
+async def _run_discovery_search(
+    prompt: str,
+    *,
+    startup: StartupInput | None = None,
+    icps: list[ICPProfile] | None = None,
+    mode: str = "AI",
+    target_count: int = 15,
+    callbacks: PipelineCallbacks | None = None,
+    client: Any | None = None,
+) -> tuple[str, list[str], bool]:
+    """
+    Runs live web discovery: prefers our encapsulated live web index when configured
+    (saving Gemini Search quota cleanly), and falls back to grounded/inference Gemini search.
+    """
+    if client is None and startup is not None and icps and has_live_web_index():
+        query_count = 4 if target_count > 20 else 2
+        pages = 2 if target_count > 20 else 1
+        queries = await _synthesize_live_web_queries(
+            startup, icps, mode=mode, desired_queries=query_count, client=None
+        )
+        if callbacks is not None:
+            await callbacks.on_model_call(ModelId.GEMINI_3_5_FLASH_LITE)
+        notes, urls = await query_live_web_index(
+            queries, num_per_query=10, pages_per_query=pages
+        )
+        if notes and urls:
+            return notes, urls, True
+
+    return await _run_grounded_gemini_search(prompt, client=client)
+
+
+async def _run_grounded_gemini_search(
+    prompt: str,
+    client: Any | None = None,
+) -> tuple[str, list[str], bool]:
+    if client is not None:
+        res = await client.aio.models.generate_content(
+            model=settings.gemini_workhorse_model,
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(temperature=0.2),
+        )
+        text = (res.text or "").strip()
+        if not text:
+            raise RuntimeError("Search discovery returned empty results.")
+        return text, [], False
 
     last_exc: Exception | None = None
-    for model_name, use_search in search_models:
-        try:
-            cfg = genai.types.GenerateContentConfig(
-                tools=[genai.types.Tool(google_search=genai.types.GoogleSearch())]
-                if use_search
-                else None,
-                temperature=0.2,
-            )
-            res = await genai_client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=cfg,
-            )
-            text = (res.text or "").strip()
-            if not text:
-                continue
-            grounding_urls: list[str] = []
-            cand = res.candidates[0] if getattr(res, "candidates", None) else None
-            gm = getattr(cand, "grounding_metadata", None)
-            chunks = getattr(gm, "grounding_chunks", None) or []
-            for ch in chunks:
-                uri = getattr(getattr(ch, "web", None), "uri", None)
-                if uri:
-                    grounding_urls.append(uri)
-            if client is None:
-                key_rotator.mark_ok(_api_key)
-            return text, grounding_urls, use_search
-        except Exception as exc:
-            last_exc = exc
-            # Mark key throttled so rotator skips it next round
-            if client is None and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
-                key_rotator.mark_throttled(_api_key)
-                _api_key = key_rotator.next_key()
-                genai_client = genai.Client(
-                    api_key=_api_key,
-                    http_options=genai.types.HttpOptions(
-                        retry_options=genai.types.HttpRetryOptions(attempts=1)
+
+    # 1. Try Google Search grounding ONLY on keys whose search quota is unblocked,
+    # quarantining search separately so 404/429 never blocks healthy inference keys.
+    search_models = ["gemini-2.5-flash", "gemini-3.8-flash", settings.gemini_brain_model]
+    for _ in range(min(2, key_rotator.pool_size)):
+        search_key = key_rotator.next_search_key()
+        if not search_key:
+            break
+        s_client = _new_genai_client(search_key)
+        hit_search_limit = False
+        for model_name in search_models:
+            try:
+                res = await s_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        tools=[genai.types.Tool(google_search=genai.types.GoogleSearch())],
+                        temperature=0.2,
                     ),
                 )
-            if not use_search and is_transient_api_error(exc):
+                text = (res.text or "").strip()
+                if not text:
+                    continue
+                grounding_urls: list[str] = []
+                cand = res.candidates[0] if getattr(res, "candidates", None) else None
+                gm = getattr(cand, "grounding_metadata", None)
+                chunks = getattr(gm, "grounding_chunks", None) or []
+                for ch in chunks:
+                    uri = getattr(getattr(ch, "web", None), "uri", None)
+                    if uri:
+                        grounding_urls.append(uri)
+                key_rotator.mark_search_ok(search_key)
+                return text, grounding_urls, True
+            except Exception as exc:
+                last_exc = exc
+                err_s = str(exc)
+                if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s or "404" in err_s:
+                    hit_search_limit = True
+                    continue
+                break
+        if hit_search_limit:
+            key_rotator.mark_search_throttled(search_key)
+
+    # 2. Fallback to standard non-search inference rotated across healthy keys
+    for _ in range(max(2, key_rotator.pool_size)):
+        infer_key = key_rotator.next_key()
+        i_client = _new_genai_client(infer_key)
+        try:
+            res = await i_client.aio.models.generate_content(
+                model=settings.gemini_workhorse_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(temperature=0.2),
+            )
+            text = (res.text or "").strip()
+            if text:
+                key_rotator.mark_ok(infer_key)
+                return text, [], False
+        except Exception as exc:
+            last_exc = exc
+            if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                key_rotator.mark_throttled(infer_key)
+                continue
+            if is_transient_api_error(exc):
                 raise
-            continue
 
     if last_exc is not None:
         raise last_exc
@@ -138,12 +263,6 @@ async def _extract_structured_candidates(
     used_live_search: bool = True,
     client: Any | None = None,
 ) -> list[DiscoveredLeadCandidate]:
-    genai_client = client or genai.Client(
-        api_key=key_rotator.next_key(),
-        http_options=genai.types.HttpOptions(
-            retry_options=genai.types.HttpRetryOptions(attempts=1)
-        ),
-    )
     name_rule = (
         "- CRITICAL: Copy a human `full_name` and `linkedin_url` ONLY if explicitly observed in NOTES/URLS; "
         "NEVER invent or guess fictional person names — use role labels like `Brand & Packaging Team` or `Operations Leadership` when unverified."
@@ -157,22 +276,37 @@ async def _extract_structured_candidates(
         f"{name_rule}\n"
         f"- Preserve concrete signals, dates, and company facts.\n\n"
         f"NOTES:\n{raw_notes}\n\n"
-        f"GROUNDING URLS:\n" + "\n".join(grounding_urls[:20])
+        f"GROUNDING URLS:\n" + "\n".join(grounding_urls[:60])
     )
 
     async def _extract(_: int) -> DiscoveredLeadBatch:
-        resp = await genai_client.aio.models.generate_content(
-            model=settings.gemini_workhorse_model,
-            contents=extract_prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.1,
-                response_mime_type="application/json",
-                response_schema=DiscoveredLeadBatch,
-            ),
-        )
-        return DiscoveredLeadBatch.model_validate_json(resp.text or "{}")
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            genai_client = _new_genai_client(active_key)
+        else:
+            genai_client = client
+        try:
+            resp = await genai_client.aio.models.generate_content(
+                model=settings.gemini_workhorse_model,
+                contents=extract_prompt,
+                config=genai.types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                    response_schema=DiscoveredLeadBatch,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+            return DiscoveredLeadBatch.model_validate_json(resp.text or "{}")
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
 
-    executor = GentleAdaptiveExecutor(concurrency=1, launch_stagger_s=0.0, max_retries=1)
+    executor = GentleAdaptiveExecutor(
+        concurrency=1, launch_stagger_s=0.0, max_retries=max(2, key_rotator.pool_size)
+    )
     async for _, batch in executor.run_stream([0], _extract):
         await callbacks.on_model_call(ModelId.GEMINI_3_5_FLASH_LITE)
         return batch.candidates
@@ -215,7 +349,15 @@ async def _search_ai_candidates(
                 f"3. Include company name, official domain, likely buyer role, any real public executive name, industry, headcount, stage, and concrete signal."
             )
             try:
-                notes, urls, used_search = await _run_grounded_gemini_search(prompt, client=client)
+                notes, urls, used_search = await _run_discovery_search(
+                    prompt,
+                    startup=startup,
+                    icps=[icp],
+                    mode="AI",
+                    target_count=per_icp_target,
+                    callbacks=callbacks,
+                    client=client,
+                )
                 await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
                 cands = await _extract_structured_candidates(
                     notes, urls, per_icp_target, callbacks, used_live_search=used_search, client=client
@@ -249,7 +391,15 @@ async def _search_ai_candidates(
         f"2. Exclude { _normalize_root_domain(startup.product_url) or startup.product_name } and directory/social sites.\n"
         f"3. Include company name, official domain, likely buyer role, any real public executive name, industry, headcount, stage, and concrete signal."
     )
-    notes, urls, used_search = await _run_grounded_gemini_search(prompt, client=client)
+    notes, urls, used_search = await _run_discovery_search(
+        prompt,
+        startup=startup,
+        icps=icps,
+        mode="AI",
+        target_count=target_n,
+        callbacks=callbacks,
+        client=client,
+    )
     await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
     cands = await _extract_structured_candidates(
         notes, urls, target_n, callbacks, used_live_search=used_search, client=client
@@ -324,7 +474,15 @@ async def _search_linkedin_candidates(
             f"Target Buyer Profiles:\n{icp_text}\n\n"
             f"For EVERY person provide: full_name, exact LinkedIn job title, company name, clean official company domain (e.g. company.com), linkedin.com/in/... URL if surfaced, approximate headcount, industry, and why their current initiatives/posts make them relevant."
         )
-        notes, urls, used_search = await _run_grounded_gemini_search(prompt, client=client)
+        notes, urls, used_search = await _run_discovery_search(
+            prompt,
+            startup=startup,
+            icps=icps,
+            mode="LINKEDIN",
+            target_count=target_needed,
+            callbacks=callbacks,
+            client=client,
+        )
         await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
         xray_cands = await _extract_structured_candidates(
             notes,

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     gemini_workhorse_model: str = "gemini-3.5-flash-lite"
     gemini_embedding_model: str = "gemini-embedding-2"
 
+    # Optional encapsulated live web-search backend key(s) (comma-separated supported)
+    serper_api_key: str = ""
+
     default_execution_mode: str = "LIVE"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
@@ -57,6 +60,11 @@ class Settings(BaseSettings):
     def gemini_api_key_pool(self) -> list[str]:
         """Return all API keys; supports comma-separated pool: key1,key2,key3."""
         return [k.strip() for k in self.gemini_api_key.split(",") if k.strip()]
+
+    @property
+    def serper_api_key_pool(self) -> list[str]:
+        """Return all live web-index keys; supports comma-separated pool."""
+        return [k.strip() for k in self.serper_api_key.split(",") if k.strip()]
 
 
 settings = Settings()

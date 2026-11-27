@@ -19,26 +19,41 @@ from app.agents.key_rotator import key_rotator
 from app.agents.prompts import AUDITOR_SYSTEM_PROMPT
 from app.agents.rate_limiter import GentleAdaptiveExecutor
 from app.config import settings
+from app.harvey_bridge.web_index import has_live_web_index, query_live_web_index
 from app.models.schemas import MarketAuditResult, ModelId, PipelinePhase, StartupInput
 from app.services.url_fetcher import fetch_site_context
 
 
 async def _run_optional_search_grounding(product_name: str, description: str) -> str | None:
     """
-    Lightweight optional Gemini Search Grounding pass for real competitor & market context.
+    Lightweight optional live market context pass for real competitor & switching context.
+    Prefers our encapsulated live web index when active, then unblocked search keys.
     Never fails the pipeline or spams logs if search grounding is unavailable or throttled.
     """
-    if not settings.gemini_api_key:
+    if has_live_web_index():
+        try:
+            notes, _ = await query_live_web_index(
+                [f"{product_name} competitors alternatives pricing switching"],
+                num_per_query=6,
+                pages_per_query=1,
+            )
+            if notes:
+                return notes[:1400]
+        except Exception:
+            pass
+
+    search_key = key_rotator.next_search_key()
+    if not search_key:
         return None
     try:
         client = genai.Client(
-            api_key=key_rotator.next_key(),
+            api_key=search_key,
             http_options=genai.types.HttpOptions(
                 retry_options=genai.types.HttpRetryOptions(attempts=1)
             ),
         )
         res = await client.aio.models.generate_content(
-            model=settings.gemini_workhorse_model,
+            model="gemini-2.5-flash",
             contents=(
                 f"Briefly list 3 real competing products and common buyer switching triggers "
                 f"for this category in 4 concise bullets.\nProduct: {product_name}\n"
@@ -50,8 +65,13 @@ async def _run_optional_search_grounding(product_name: str, description: str) ->
             ),
         )
         text = (res.text or "").strip()
-        return text if text else None
-    except Exception:
+        if text:
+            key_rotator.mark_search_ok(search_key)
+            return text
+        return None
+    except Exception as exc:
+        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) or "404" in str(exc):
+            key_rotator.mark_search_throttled(search_key)
         return None
 
 
@@ -104,7 +124,10 @@ async def execute_market_audit(
             )
 
         executor = GentleAdaptiveExecutor(
-            concurrency=1, launch_stagger_s=0.0, max_retries=2, backoff_schedule=(2.0, 5.0)
+            concurrency=1,
+            launch_stagger_s=0.0,
+            max_retries=max(2, key_rotator.pool_size),
+            backoff_schedule=(1.5, 3.0),
         )
         audit_result: MarketAuditResult | None = None
         async for _, res in executor.run_stream([0], _call_auditor_stub):
@@ -131,7 +154,7 @@ async def execute_market_audit(
         return "WEBSITE_UNREACHABLE_OR_EMPTY: Use search_market_intel to inspect live competitor positioning."
 
     async def search_market_intel(product_name: str, category_description: str) -> str:
-        """Run Google Search grounding to retrieve real competitors and buyer switching triggers."""
+        """Run Google Search / live index grounding to retrieve real competitors and buyer switching triggers."""
         notes = await _run_optional_search_grounding(product_name, category_description)
         if notes:
             flags["search_used"] = True
@@ -161,68 +184,76 @@ async def execute_market_audit(
         active_key = key_rotator.next_key()
         if active_key:
             os.environ["GOOGLE_API_KEY"] = active_key
-        auditor_llm = LlmAgent(
-            name="market_auditor_llm",
-            model=settings.gemini_brain_model,
-            instruction=adaptive_instruction,
-            tools=[
-                FunctionTool(fetch_product_website),
-                FunctionTool(search_market_intel),
-            ],
-            output_schema=MarketAuditResult,
-            output_key="market_audit_out",
-            generate_content_config=genai.types.GenerateContentConfig(temperature=0.2),
-        )
-        session_service = InMemorySessionService()
-        sid = f"audit_{uuid.uuid4().hex[:8]}"
-        await session_service.create_session(
-            app_name="leadslayer_auditor",
-            user_id="founder",
-            session_id=sid,
-        )
-        runner = Runner(
-            app_name="leadslayer_auditor",
-            agent=auditor_llm,
-            session_service=session_service,
-        )
-        msg = genai.types.Content(
-            role="user",
-            parts=[genai.types.Part.from_text(text=user_prompt)],
-        )
-        last_text = ""
-        async for ev in runner.run_async(
-            user_id="founder",
-            session_id=sid,
-            new_message=msg,
-        ):
-            for fc in ev.get_function_calls() or []:
-                if fc.name != "set_model_response":
-                    await callbacks.on_log(
-                        f"[MarketAuditor · Decision] Invoking `{fc.name}` tool..."
-                    )
-            if ev.content and ev.content.parts:
-                for p in ev.content.parts:
-                    if getattr(p, "text", None):
-                        last_text = p.text
-
-        final_session = await session_service.get_session(
-            app_name="leadslayer_auditor",
-            user_id="founder",
-            session_id=sid,
-        )
-        raw_out = (final_session.state if final_session else {}).get("market_audit_out")
-        if raw_out is not None:
-            parsed = (
-                raw_out
-                if isinstance(raw_out, MarketAuditResult)
-                else MarketAuditResult.model_validate(raw_out)
-                if isinstance(raw_out, dict)
-                else MarketAuditResult.model_validate_json(str(raw_out))
+        try:
+            auditor_llm = LlmAgent(
+                name="market_auditor_llm",
+                model=settings.gemini_brain_model,
+                instruction=adaptive_instruction,
+                tools=[
+                    FunctionTool(fetch_product_website),
+                    FunctionTool(search_market_intel),
+                ],
+                output_schema=MarketAuditResult,
+                output_key="market_audit_out",
+                generate_content_config=genai.types.GenerateContentConfig(temperature=0.2),
             )
-        elif last_text.strip():
-            parsed = MarketAuditResult.model_validate_json(last_text)
-        else:
-            raise RuntimeError("MarketAuditor ADK LlmAgent returned empty output.")
+            session_service = InMemorySessionService()
+            sid = f"audit_{uuid.uuid4().hex[:8]}"
+            await session_service.create_session(
+                app_name="leadslayer_auditor",
+                user_id="founder",
+                session_id=sid,
+            )
+            runner = Runner(
+                app_name="leadslayer_auditor",
+                agent=auditor_llm,
+                session_service=session_service,
+            )
+            msg = genai.types.Content(
+                role="user",
+                parts=[genai.types.Part.from_text(text=user_prompt)],
+            )
+            last_text = ""
+            async for ev in runner.run_async(
+                user_id="founder",
+                session_id=sid,
+                new_message=msg,
+            ):
+                for fc in ev.get_function_calls() or []:
+                    if fc.name != "set_model_response":
+                        await callbacks.on_log(
+                            f"[MarketAuditor · Decision] Invoking `{fc.name}` tool..."
+                        )
+                if ev.content and ev.content.parts:
+                    for p in ev.content.parts:
+                        if getattr(p, "text", None):
+                            last_text = p.text
+
+            final_session = await session_service.get_session(
+                app_name="leadslayer_auditor",
+                user_id="founder",
+                session_id=sid,
+            )
+            raw_out = (final_session.state if final_session else {}).get("market_audit_out")
+            if raw_out is not None:
+                parsed = (
+                    raw_out
+                    if isinstance(raw_out, MarketAuditResult)
+                    else MarketAuditResult.model_validate(raw_out)
+                    if isinstance(raw_out, dict)
+                    else MarketAuditResult.model_validate_json(str(raw_out))
+                )
+            elif last_text.strip():
+                parsed = MarketAuditResult.model_validate_json(last_text)
+            else:
+                raise RuntimeError("MarketAuditor ADK LlmAgent returned empty output.")
+
+            if active_key:
+                key_rotator.mark_ok(active_key)
+        except Exception as exc:
+            if active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
 
         return parsed.model_copy(
             update={
@@ -232,7 +263,10 @@ async def execute_market_audit(
         )
 
     executor = GentleAdaptiveExecutor(
-        concurrency=1, launch_stagger_s=0.0, max_retries=2, backoff_schedule=(2.0, 5.0)
+        concurrency=1,
+        launch_stagger_s=0.0,
+        max_retries=max(2, key_rotator.pool_size),
+        backoff_schedule=(1.5, 3.0),
     )
     audit_result: MarketAuditResult | None = None
     async for _, res in executor.run_stream([0], _run_adk_auditor):

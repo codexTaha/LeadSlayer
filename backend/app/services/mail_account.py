@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import aiosmtplib
 import httpx
 
-from app.config import GMAIL_OAUTH_TOKEN_FILE, settings
+from app.config import GMAIL_OAUTH_TOKEN_FILE, MAIL_SESSION_FILE, settings
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -27,14 +27,38 @@ class RuntimeMailboxConfig:
 
 
 class MailAccountStore:
-    """In-memory runtime mailbox session store seeded safely from .env."""
+    """Shared runtime mailbox session store (memory + 0600 session file + .env fallback)."""
 
     def __init__(self) -> None:
         self._runtime: RuntimeMailboxConfig | None = None
 
+    def _load_session_file(self) -> RuntimeMailboxConfig | None:
+        if not MAIL_SESSION_FILE.is_file():
+            return None
+        try:
+            raw = json.loads(MAIL_SESSION_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict) and raw.get("email") and raw.get("smtp_host"):
+                return RuntimeMailboxConfig(
+                    email=str(raw.get("email", "")),
+                    password=str(raw.get("password", "")),
+                    smtp_host=str(raw.get("smtp_host", "")),
+                    smtp_port=int(raw.get("smtp_port", 587) or 587),
+                    sender_name=str(raw.get("sender_name", "LeadSlayer")),
+                    postal_address=str(raw.get("postal_address", "")),
+                    source="ui_smtp",
+                )
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+        return None
+
     def get_effective(self) -> RuntimeMailboxConfig:
         if self._runtime is not None:
+            if self._runtime.source == "none":
+                return self._runtime
             return self._runtime
+        disk_cfg = self._load_session_file()
+        if disk_cfg is not None:
+            return disk_cfg
         env_email = settings.smtp_from_email or settings.smtp_username
         if settings.smtp_host and settings.smtp_username and settings.smtp_password:
             return RuntimeMailboxConfig(
@@ -73,15 +97,37 @@ class MailAccountStore:
             source="ui_smtp",
         )
         self._runtime = cfg
+        try:
+            MAIL_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = MAIL_SESSION_FILE.with_suffix(".json.tmp")
+            tmp.write_text(
+                json.dumps(
+                    {
+                        "email": cfg.email,
+                        "password": cfg.password,
+                        "smtp_host": cfg.smtp_host,
+                        "smtp_port": cfg.smtp_port,
+                        "sender_name": cfg.sender_name,
+                        "postal_address": cfg.postal_address,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            os.replace(tmp, MAIL_SESSION_FILE)
+            MAIL_SESSION_FILE.chmod(0o600)
+        except OSError:
+            pass
         return cfg
 
     def disconnect(self) -> None:
         self._runtime = RuntimeMailboxConfig(source="none")
-        if GMAIL_OAUTH_TOKEN_FILE.is_file():
-            try:
-                GMAIL_OAUTH_TOKEN_FILE.unlink()
-            except OSError:
-                pass
+        for f in (GMAIL_OAUTH_TOKEN_FILE, MAIL_SESSION_FILE):
+            if f.is_file():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
 
 
 mail_account_store = MailAccountStore()

@@ -19,7 +19,7 @@ export function MarketAuditCard() {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="rounded-xl border border-zinc-800 bg-zinc-950/90 p-5 space-y-5"
+      className="rounded-2xl border border-indigo-400/30 bg-[#1F2436] p-6 space-y-5 shadow-[0_16px_42px_rgba(0,0,0,0.4)]"
     >
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-zinc-800/80 pb-4">
         <div className="space-y-1.5 max-w-2xl">

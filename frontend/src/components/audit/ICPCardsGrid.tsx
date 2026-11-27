@@ -32,7 +32,7 @@ export function ICPCardsGrid() {
               hidden: { opacity: 0, y: 12 },
               visible: { opacity: 1, y: 0 },
             }}
-            className="rounded-xl border border-emerald-500/25 bg-zinc-950/90 p-4 space-y-3 hover:border-emerald-500/50 transition-colors"
+            className="rounded-2xl border border-emerald-400/30 bg-[#192825] p-5 space-y-3 shadow-[0_14px_36px_rgba(0,0,0,0.38)] hover:border-emerald-400/55 transition-colors"
           >
             <div className="flex items-start justify-between gap-2">
               <h3 className="text-sm font-semibold text-zinc-50">{icp.name}</h3>

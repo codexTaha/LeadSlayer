@@ -137,7 +137,7 @@ export function DispatchExportBar() {
 
   return (
     <>
-      <div className="sticky bottom-4 z-20 rounded-2xl border border-zinc-800 bg-[#0A0D12]/95 p-4 shadow-2xl backdrop-blur-md space-y-2.5">
+      <div className="sticky bottom-4 z-20 rounded-2xl border border-emerald-400/35 bg-[#1B2623]/95 p-4 shadow-[0_18px_46px_rgba(0,0,0,0.5)] backdrop-blur-md space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             {allSent || phase === "DISPATCHED" ? (

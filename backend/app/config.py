@@ -8,6 +8,7 @@ CONTRACTS_DIR = REPO_ROOT / "contracts"
 EXPORTS_DIR = REPO_ROOT / "exports"
 CRM_DNC_FILE = DATA_DIR / "crm_dnc.json"
 GMAIL_OAUTH_TOKEN_FILE = DATA_DIR / ".gmail_oauth_token.json"
+MAIL_SESSION_FILE = DATA_DIR / ".mail_session.json"
 HARVEY_ROOT = REPO_ROOT / "harvey"
 
 

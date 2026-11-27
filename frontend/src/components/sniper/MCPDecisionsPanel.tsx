@@ -22,7 +22,7 @@ export function MCPDecisionsPanel() {
   }
 
   return (
-    <section className="rounded-2xl border border-indigo-500/30 bg-zinc-950/90 p-5 space-y-4 shadow-xl">
+    <section className="rounded-2xl border border-violet-400/35 bg-[#211E30] p-6 space-y-4 shadow-[0_16px_42px_rgba(0,0,0,0.42)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-500/40 bg-indigo-500/15">

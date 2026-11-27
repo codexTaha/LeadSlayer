@@ -37,9 +37,15 @@ export function CommandCenterShell({
   const canToggleMode = phase === "IDLE" || phase === "READY" || phase === "ERROR";
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#07090D] text-zinc-100">
-      <header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-[#07090D]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2.5 px-4 py-3 sm:px-6">
+    <div
+      className="min-h-screen flex flex-col bg-[#181614] text-stone-100"
+      style={{
+        backgroundImage:
+          "radial-gradient(ellipse 80% 45% at 50% 0%, rgba(251, 191, 36, 0.055), transparent 70%)",
+      }}
+    >
+      <header className="sticky top-0 z-30 border-b border-stone-700/60 bg-[#201D1A]/90 backdrop-blur-md shadow-[0_8px_28px_rgba(0,0,0,0.3)]">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3.5 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-rose-500/40 bg-rose-500/15 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
@@ -140,7 +146,7 @@ export function CommandCenterShell({
 
       <ErrorAlertBanner onRetry={onRetryRun} />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-9 sm:px-6">
         {children}
       </main>
     </div>

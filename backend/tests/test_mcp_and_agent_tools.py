@@ -72,6 +72,8 @@ async def test_mcp_server_stdio_handshake_and_tools() -> None:
         "schedule_followup_reminder",
         "stage_or_dispatch_email_mcp",
         "save_campaign_artifacts",
+        "run_leadslayer_campaign",
+        "dispatch_campaign_emails",
     }
 
 
@@ -310,3 +312,44 @@ async def test_native_mail_connect_status_and_no_harvey_leaks(monkeypatch) -> No
         disc_res = await client.post("/api/mail/disconnect")
         assert disc_res.status_code == 200
         assert disc_res.json()["smtp_configured"] is False
+
+
+async def test_mcp_campaign_and_selective_dispatch_simulation_fallback(tmp_path: Path, monkeypatch) -> None:
+    crm_file = tmp_path / "crm_dnc.json"
+    exports_dir = tmp_path / "exports"
+    monkeypatch.setattr(mcp_server, "CRM_DNC_FILE", crm_file)
+    monkeypatch.setattr(mcp_server, "EXPORTS_DIR", exports_dir)
+    orig_load = mcp_server._load_crm_store
+    orig_save = mcp_server._save_crm_store
+    monkeypatch.setattr(mcp_server, "_load_crm_store", lambda crm_path=crm_file: orig_load(crm_file))
+    monkeypatch.setattr(mcp_server, "_save_crm_store", lambda data, crm_path=crm_file: orig_save(data, crm_file))
+    mail_account.mail_account_store.disconnect()
+
+    camp_res = json.loads(
+        await mcp_server.run_leadslayer_campaign(
+            product_name="KubeGuard AI",
+            description="Autonomous Kubernetes FinOps guardrail for AWS EKS teams.",
+            founder_assumptions="Any startup on AWS needs FinOps.",
+            target_qualified_leads=5,
+            execution_mode="SAFE_REPLAY",
+        )
+    )
+    assert camp_res["survivor_count"] == 5
+    assert [item["index"] for item in camp_res["numbered_survivors"]] == [1, 2, 3, 4, 5]
+    assert camp_res["mailbox_attached"] is False
+
+    # User selects numbers "1, 3" -> no mailbox attached -> verified Sandbox simulation
+    disp_res = json.loads(
+        await mcp_server.dispatch_campaign_emails(
+            run_id=camp_res["run_id"],
+            selection="1, 3",
+            delivery_mode="AUTO",
+        )
+    )
+    assert disp_res["mode_executed"] == "SANDBOX_SIMULATION"
+    assert disp_res["dispatched_count"] == 2
+    assert len(disp_res["selected_lead_ids"]) == 2
+    assert disp_res["selected_lead_ids"][0] == camp_res["numbered_survivors"][0]["lead_id"]
+    assert disp_res["selected_lead_ids"][1] == camp_res["numbered_survivors"][2]["lead_id"]
+    assert Path(disp_res["receipts_file"]).is_file()
+    assert (exports_dir / camp_res["run_id"] / "executive_brief.md").is_file()

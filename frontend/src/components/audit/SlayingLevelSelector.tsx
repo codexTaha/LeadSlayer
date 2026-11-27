@@ -18,17 +18,17 @@ export function SlayingLevelSelector({ disabled }: { disabled?: boolean }) {
   const updateStartupInput = useLeadSlayerStore((s) => s.updateStartupInput);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-mono uppercase tracking-wider text-zinc-400">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
           Slayer Aggression Level
         </label>
-        <span className="text-[11px] text-zinc-500">
+        <span className="text-xs text-zinc-500">
           Controls Tier 2 &amp; Tier 3 disqualification strictness
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
         {ORDER.map((level) => {
           const meta = SLAYING_LEVELS[level];
           const Icon = ICONS[level];
@@ -40,17 +40,25 @@ export function SlayingLevelSelector({ disabled }: { disabled?: boolean }) {
               type="button"
               disabled={disabled}
               onClick={() => updateStartupInput({ slaying_level: level })}
-              className={`relative rounded-xl border p-3 text-left transition-all cursor-pointer disabled:opacity-50 ${
+              className={`relative rounded-xl border p-4 text-left transition-all cursor-pointer disabled:opacity-50 ${
                 active
-                  ? `${meta.accentBorder} ${meta.accentBg} shadow-lg`
-                  : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+                  ? `${meta.accentBorder} ${meta.accentBg} ring-1 ring-inset ring-white/15 shadow-[0_10px_28px_rgba(0,0,0,0.35)]`
+                  : "border-stone-700/60 bg-[#1D1814] hover:border-stone-600 hover:bg-[#231D18]"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon
-                    className={`h-4 w-4 ${active ? meta.accentText : "text-zinc-400"}`}
-                  />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg border ${
+                      active
+                        ? `${meta.accentBorder} bg-black/30`
+                        : "border-zinc-800 bg-zinc-950/70"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-3.5 w-3.5 ${active ? meta.accentText : "text-zinc-500"}`}
+                    />
+                  </div>
                   <span
                     className={`text-sm font-semibold ${
                       active ? "text-zinc-50" : "text-zinc-300"
@@ -60,16 +68,16 @@ export function SlayingLevelSelector({ disabled }: { disabled?: boolean }) {
                   </span>
                 </div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-mono ${
+                  className={`rounded-full border px-2.5 py-0.5 text-[11px] font-mono ${
                     active
-                      ? `${meta.accentBg} ${meta.accentText}`
-                      : "bg-zinc-800 text-zinc-400"
+                      ? `${meta.accentBorder} ${meta.accentBg} ${meta.accentText}`
+                      : "border-zinc-800 bg-zinc-900 text-zinc-500"
                   }`}
                 >
                   {meta.expectedSurvival}
                 </span>
               </div>
-              <p className="mt-1.5 text-xs text-zinc-400 leading-relaxed">
+              <p className="mt-2.5 text-xs text-zinc-400 leading-relaxed">
                 {meta.tagline}
               </p>
             </button>

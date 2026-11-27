@@ -1,34 +1,56 @@
-"""Tier C bridge connecting Harvey's deterministic send gate and Gmail/SMTP providers."""
+"""Deliverability gate, DNC enforcement, and SMTP/Gmail OAuth transport bridge."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.config import HARVEY_ROOT, settings
+from app.config import CRM_DNC_FILE, GMAIL_OAUTH_TOKEN_FILE, HARVEY_ROOT, settings
 from app.harvey_bridge import ensure_harvey_on_path
 from app.models.schemas import (
     DeliveryMode,
     DispatchReceipt,
     DispatchResponse,
     EmailDraft,
-    HarveyStatusResponse,
     LeadRecord,
-    PipelinePhase,
+    MailStatusResponse,
 )
+from app.services.mail_account import mail_account_store, mask_email
 
 ensure_harvey_on_path()
 
+import harvey.integrations.gmail as _gmail_mod  # noqa: E402
 from harvey.gate import do_not_contact_entries, pre_send_check  # noqa: E402
-from harvey.integrations.gmail import GmailProvider, TOKEN_FILE as HARVEY_GMAIL_TOKEN_FILE  # noqa: E402
+from harvey.integrations.gmail import GmailProvider  # noqa: E402
 from harvey.integrations.smtp_mail import SmtpImapProvider  # noqa: E402
 
 
+def _sync_gmail_token_path() -> None:
+    if GMAIL_OAUTH_TOKEN_FILE.is_file():
+        _gmail_mod.TOKEN_FILE = GMAIL_OAUTH_TOKEN_FILE
+
+
+def _normalize_delivery_mode(mode: DeliveryMode) -> str:
+    if mode in ("SMTP", "HARVEY_SMTP"):
+        return "SMTP"
+    if mode in ("GMAIL_OAUTH", "HARVEY_GMAIL"):
+        return "GMAIL_OAUTH"
+    return "SANDBOX"
+
+
 def _build_harvey_config_and_env(product_name: str = "LeadSlayer"):
-    from_email = settings.smtp_from_email or settings.smtp_username or "outreach@leadslayer.ai"
+    mailbox = mail_account_store.get_effective()
+    from_email = mailbox.email or settings.smtp_from_email or settings.smtp_username or "outreach@leadslayer.ai"
+    sender_name = mailbox.sender_name or settings.smtp_from_name or "LeadSlayer"
+    smtp_host = mailbox.smtp_host
+    smtp_port = mailbox.smtp_port
+    smtp_user = mailbox.email if mailbox.source == "ui_smtp" else settings.smtp_username
+    smtp_pass = mailbox.password
+
     config = SimpleNamespace(
         persona=SimpleNamespace(
-            name=settings.smtp_from_name or "LeadSlayer",
+            name=sender_name,
             company=product_name,
             email=from_email,
         ),
@@ -40,14 +62,14 @@ def _build_harvey_config_and_env(product_name: str = "LeadSlayer"):
         ),
     )
     env = SimpleNamespace(
-        smtp_host=settings.smtp_host,
-        smtp_port=settings.smtp_port,
-        smtp_username=settings.smtp_username,
-        smtp_password=settings.smtp_password,
-        imap_host=settings.imap_host or settings.smtp_host,
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_user,
+        smtp_password=smtp_pass,
+        imap_host=settings.imap_host or smtp_host,
         imap_port=settings.imap_port,
-        imap_username=settings.smtp_username,
-        imap_password=settings.smtp_password,
+        imap_username=smtp_user,
+        imap_password=smtp_pass,
         gmail_client_id=settings.gmail_client_id,
         gmail_client_secret=settings.gmail_client_secret,
     )
@@ -55,15 +77,36 @@ def _build_harvey_config_and_env(product_name: str = "LeadSlayer"):
 
 
 def _parse_dnc_list() -> list[str]:
-    if not settings.do_not_contact_domains.strip():
-        return []
-    try:
-        return do_not_contact_entries(settings.do_not_contact_domains)
-    except ValueError:
-        return [x.strip().lower() for x in settings.do_not_contact_domains.split(",") if x.strip()]
+    entries: list[str] = []
+    if settings.do_not_contact_domains.strip():
+        try:
+            entries.extend(do_not_contact_entries(settings.do_not_contact_domains))
+        except ValueError:
+            entries.extend(
+                x.strip().lower()
+                for x in settings.do_not_contact_domains.split(",")
+                if x.strip()
+            )
+    if CRM_DNC_FILE.is_file():
+        try:
+            raw = json.loads(CRM_DNC_FILE.read_text(encoding="utf-8"))
+            for domain, record in (raw.get("records") or {}).items():
+                if isinstance(record, dict) and record.get("status") in (
+                    "DNC",
+                    "OPT_OUT",
+                    "CUSTOMER",
+                    "COMPETITOR",
+                ):
+                    clean = str(domain).strip().lower()
+                    if clean and clean not in entries:
+                        entries.append(clean)
+        except (OSError, json.JSONDecodeError):
+            pass
+    return entries
 
 
-def get_harvey_status() -> HarveyStatusResponse:
+def get_mail_status() -> MailStatusResponse:
+    _sync_gmail_token_path()
     config, env = _build_harvey_config_and_env()
     smtp_provider = SmtpImapProvider(config, env)
     gmail_provider = GmailProvider(config, env)
@@ -74,16 +117,28 @@ def get_harvey_status() -> HarveyStatusResponse:
     except ImportError:
         has_pw = False
 
-    return HarveyStatusResponse(
-        harvey_connected=HARVEY_ROOT.exists(),
-        smtp_configured=smtp_provider.is_configured(),
-        gmail_configured=gmail_provider.is_configured() or HARVEY_GMAIL_TOKEN_FILE.is_file(),
-        linkedin_playwright_configured=bool(
+    smtp_ok = smtp_provider.is_configured()
+    gmail_ok = gmail_provider.is_configured()
+    active_provider = "SMTP" if smtp_ok else ("GMAIL_OAUTH" if gmail_ok else "SANDBOX")
+    mailbox = mail_account_store.get_effective()
+    sender_display = mailbox.email or settings.smtp_from_email or settings.smtp_username
+
+    return MailStatusResponse(
+        mail_engine_ready=HARVEY_ROOT.exists(),
+        smtp_configured=smtp_ok,
+        gmail_configured=gmail_ok,
+        gmail_oauth_available=bool(settings.gmail_client_id and settings.gmail_client_secret),
+        linkedin_browser_configured=bool(
             has_pw and settings.linkedin_email and settings.linkedin_password
         ),
-        smtp_sender=settings.smtp_from_email or settings.smtp_username,
+        active_provider=active_provider,
+        smtp_sender=mask_email(sender_display) if sender_display else "",
+        sender_name=mailbox.sender_name or settings.smtp_from_name or "LeadSlayer",
         do_not_contact_count=len(_parse_dnc_list()),
     )
+
+
+get_harvey_status = get_mail_status
 
 
 async def dispatch_emails_via_harvey(
@@ -94,26 +149,29 @@ async def dispatch_emails_via_harvey(
     product_name: str = "LeadSlayer",
 ) -> tuple[DispatchResponse, bool]:
     """
-    Runs Harvey's deterministic pre_send_check on every approved draft, and either:
-    - SANDBOX: marks validated drafts SENT locally ($0, safe testing), blocking only DNC matches
-    - HARVEY_SMTP / HARVEY_GMAIL: sends real mail through Harvey's provider after passing all gate checks
+    Runs LeadSlayer's deterministic pre-send compliance gate on every approved draft, and either:
+    - SANDBOX: marks validated drafts SENT locally ($0, safe testing), blocking only DNC/invalid matches
+    - SMTP / GMAIL_OAUTH: sends real mail through the connected mailbox after passing all gate checks
     """
+    _sync_gmail_token_path()
+    normalized_mode = _normalize_delivery_mode(delivery_mode)
     config, env = _build_harvey_config_and_env(product_name=product_name)
     dnc_list = _parse_dnc_list()
-    postal = settings.sender_postal_address.strip()
+    mailbox = mail_account_store.get_effective()
+    postal = (mailbox.postal_address or settings.sender_postal_address).strip()
 
     provider = None
-    if delivery_mode == "HARVEY_SMTP":
+    if normalized_mode == "SMTP":
         provider = SmtpImapProvider(config, env)
         if not provider.is_configured():
             raise ValueError(
-                "Harvey SMTP is not configured. Add SMTP_HOST, SMTP_USERNAME, and SMTP_PASSWORD in .env, or use Sandbox dispatch."
+                "SMTP mailbox is not connected yet. Click 'Connect Email' to link Gmail App Password or custom SMTP, or use Sandbox dispatch."
             )
-    elif delivery_mode == "HARVEY_GMAIL":
+    elif normalized_mode == "GMAIL_OAUTH":
         provider = GmailProvider(config, env)
         if not provider.is_configured():
             raise ValueError(
-                "Harvey Gmail OAuth is not configured. Configure GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET and run 'harvey gmail auth', or use SMTP/Sandbox."
+                "Gmail OAuth is not connected yet. Click 'Connect Email -> Sign in with Google' (requires GMAIL_CLIENT_ID in .env) or use SMTP/Sandbox."
             )
 
     receipts: list[DispatchReceipt] = []
@@ -126,10 +184,8 @@ async def dispatch_emails_via_harvey(
             continue
 
         lead = leads_by_id.get(lid)
-        # Map lead to lightweight Harvey prospect object if live-sending
         prospect_proxy = None
-        if delivery_mode != "SANDBOX" and lead is not None:
-            # Allow sending to verified public emails or MX-verified guesses explicitly approved by user in Sniper Deck
+        if normalized_mode != "SANDBOX" and lead is not None:
             effective_status = "verified" if lead.email_status in ("verified", "public", "unknown") else lead.email_status
             if lead.email_status == "invalid" or lead.mx_provider == "none":
                 effective_status = "invalid"
@@ -141,7 +197,7 @@ async def dispatch_emails_via_harvey(
             )
 
         body_to_send = draft.body
-        if postal and postal not in body_to_send and delivery_mode != "SANDBOX":
+        if postal and postal not in body_to_send and normalized_mode != "SANDBOX":
             body_to_send = f"{body_to_send.rstrip()}\n\n--\n{postal}"
 
         gate = pre_send_check(
@@ -155,8 +211,7 @@ async def dispatch_emails_via_harvey(
             do_not_contact=dnc_list,
         )
 
-        # In SANDBOX mode, only hard-block explicit DNC / invalid email syntax; surface soft style notes cleanly
-        if delivery_mode == "SANDBOX":
+        if normalized_mode == "SANDBOX":
             hard_blocks = [
                 r
                 for r in gate.reasons
@@ -188,7 +243,6 @@ async def dispatch_emails_via_harvey(
             )
             continue
 
-        # Live Harvey dispatch (HARVEY_SMTP or HARVEY_GMAIL) enforces ALL gate checks
         if not gate.ok:
             blocked_count += 1
             receipts.append(
@@ -196,7 +250,7 @@ async def dispatch_emails_via_harvey(
                     lead_id=lid,
                     recipient_email=draft.recipient_email,
                     status="BLOCKED",
-                    provider=delivery_mode,
+                    provider=normalized_mode,
                     gate_reasons=gate.reasons,
                 )
             )
@@ -216,7 +270,7 @@ async def dispatch_emails_via_harvey(
                     lead_id=lid,
                     recipient_email=draft.recipient_email,
                     status="SENT",
-                    provider=delivery_mode,
+                    provider=normalized_mode,
                     message_id=send_res.message_id,
                     gate_reasons=[],
                 )
@@ -228,7 +282,7 @@ async def dispatch_emails_via_harvey(
                     lead_id=lid,
                     recipient_email=draft.recipient_email,
                     status="FAILED",
-                    provider=delivery_mode,
+                    provider=normalized_mode,
                     error=send_res.error,
                 )
             )
@@ -237,9 +291,12 @@ async def dispatch_emails_via_harvey(
         DispatchResponse(
             dispatched_count=sent_count,
             blocked_count=blocked_count,
-            delivery_mode=delivery_mode,
+            delivery_mode=normalized_mode,
             sent_at=datetime.now(timezone.utc).isoformat(),
             receipts=receipts,
         ),
         sent_count > 0,
     )
+
+
+dispatch_emails_via_engine = dispatch_emails_via_harvey

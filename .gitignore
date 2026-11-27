@@ -14,6 +14,10 @@ build/
 .env.local
 data/.emb_cache.json
 data/.emb_cache.json.tmp
+data/crm_dnc.json
+data/.gmail_oauth_token.json
+harvey/data/gmail_token.json
+exports/
 
 # Node / Next.js
 frontend/node_modules/

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import DATA_DIR, settings
 from app.models.schemas import HealthResponse, ParseCsvResponse, PresetResponse
+from app.routers.mail_router import mail_router
 from app.routers.pipeline_router import pipeline_router
 from app.services.lead_loader import (
     load_default_startup,
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(pipeline_router)
+app.include_router(mail_router)
 
 
 @app.get("/api/health", response_model=HealthResponse)

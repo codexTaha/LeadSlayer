@@ -53,6 +53,7 @@ class StreamEventType(str, Enum):
     LEADS_LOADED = "leads_loaded"
     LEAD_VERDICT = "lead_verdict"
     EMAIL_DRAFTED = "email_drafted"
+    MCP_TOOL_CALL = "mcp_tool_call"
     TELEMETRY_UPDATE = "telemetry_update"
     PIPELINE_COMPLETED = "pipeline_completed"
     PIPELINE_ERROR = "pipeline_error"
@@ -222,6 +223,26 @@ class TelemetryMetrics(BaseModel):
     estimated_saved_spam_hours: float = 0.0
 
 
+class MCPToolCallRecord(BaseModel):
+    id: str
+    timestamp_ms: int
+    agent_name: str
+    decision_reason: str
+    server_name: str = "leadslayer-ops-mcp"
+    tool_name: str
+    arguments_summary: str = ""
+    result_summary: str = ""
+    status: Literal["CALLED", "SUCCEEDED", "BLOCKED", "FAILED"] = "SUCCEEDED"
+
+
+class MCPStatusResponse(BaseModel):
+    connected: bool
+    server_name: str = "leadslayer-ops-mcp"
+    transport: str = "stdio"
+    tools: list[str] = Field(default_factory=list)
+    error: str = ""
+
+
 class StreamEvent(BaseModel):
     event_id: int = Field(ge=1)
     run_id: str
@@ -240,6 +261,7 @@ class RunStateSnapshot(BaseModel):
     leads: list[LeadRecord] = Field(default_factory=list)
     verdicts: dict[str, SlayerVerdict] = Field(default_factory=dict)
     emails: dict[str, EmailDraft] = Field(default_factory=dict)
+    mcp_tool_calls: list[MCPToolCallRecord] = Field(default_factory=list)
     telemetry: TelemetryMetrics = Field(default_factory=TelemetryMetrics)
     error_message: str | None = None
 
@@ -272,7 +294,7 @@ class ResurrectResponse(BaseModel):
     telemetry: TelemetryMetrics
 
 
-DeliveryMode = Literal["SANDBOX", "HARVEY_SMTP", "HARVEY_GMAIL"]
+DeliveryMode = Literal["SANDBOX", "SMTP", "GMAIL_OAUTH", "HARVEY_SMTP", "HARVEY_GMAIL"]
 
 
 class DispatchRequest(BaseModel):
@@ -298,10 +320,26 @@ class DispatchResponse(BaseModel):
     receipts: list[DispatchReceipt]
 
 
-class HarveyStatusResponse(BaseModel):
-    harvey_connected: bool
+class MailStatusResponse(BaseModel):
+    mail_engine_ready: bool
     smtp_configured: bool
     gmail_configured: bool
-    linkedin_playwright_configured: bool
+    gmail_oauth_available: bool = False
+    linkedin_browser_configured: bool = False
+    active_provider: Literal["SANDBOX", "SMTP", "GMAIL_OAUTH"] = "SANDBOX"
     smtp_sender: str = ""
+    sender_name: str = ""
     do_not_contact_count: int = 0
+
+
+class SMTPConnectRequest(BaseModel):
+    email: str = Field(min_length=3)
+    password: str = Field(min_length=1)
+    smtp_host: str = Field(default="smtp.gmail.com", min_length=3)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    sender_name: str = Field(default="LeadSlayer", min_length=1)
+    postal_address: str = ""
+    verify_connection: bool = True
+
+
+HarveyStatusResponse = MailStatusResponse

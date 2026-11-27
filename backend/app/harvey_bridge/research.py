@@ -174,7 +174,7 @@ async def research_company_with_harvey(
                     board = detect_board(page_html, domain=clean_domain)
                     if board is not None:
                         ats_label = board.label
-                        postings = await read_board(client, board)
+                        postings = (await read_board(client, board)) or []
                         ats_roles = [p.summary() for p in postings[:5]]
                         break
     except (httpx.HTTPError, ValueError):

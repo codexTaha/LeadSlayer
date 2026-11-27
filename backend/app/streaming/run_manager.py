@@ -15,8 +15,9 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 from app.agents.interface import PipelineCallbacks, PipelineFinalResult
-from app.config import DATA_DIR, settings
+from app.config import DATA_DIR, EXPORTS_DIR, settings
 from app.harvey_bridge.dispatcher import dispatch_emails_via_harvey
+from app.streaming.exporter import persist_verified_leads_csv
 from app.models.schemas import (
     DeliveryMode,
     DispatchReceipt,
@@ -463,6 +464,7 @@ class RunManager:
         pacer_fast_delay_s: float = 0.025,
         replay_path: Path = DATA_DIR / "replay_snapshot.json",
         replay_time_scale: float = 1.0,
+        exports_dir: Path | None = None,
     ) -> None:
         self._runs: OrderedDict[str, RunState] = OrderedDict()
         self._max_runs = max_runs
@@ -473,6 +475,10 @@ class RunManager:
         self._pacer_fast_delay_s = pacer_fast_delay_s
         self._replay_path = replay_path
         self._replay_time_scale = replay_time_scale
+        self._exports_dir = exports_dir
+
+    def _effective_exports_dir(self) -> Path:
+        return self._exports_dir if self._exports_dir is not None else EXPORTS_DIR
 
     def _purge_expired_and_cap(self) -> None:
         now = time.time()
@@ -566,6 +572,13 @@ class RunManager:
                 await runner(state.run_id, state.startup_input, state.leads, callbacks)
 
             await state.pacer.flush()
+            persist_verified_leads_csv(
+                state.run_id,
+                state.leads,
+                state.verdicts,
+                state.emails,
+                exports_dir=self._effective_exports_dir(),
+            )
             state.phase = PipelinePhase.READY
             await state.pacer.emit_immediate(
                 StreamEventType.PIPELINE_COMPLETED,
@@ -622,6 +635,13 @@ class RunManager:
         state.emails[lead_id] = draft
         if not old_verdict.survived:
             state.telemetry.record_resurrection(old_verdict.rejection_category)
+        persist_verified_leads_csv(
+            state.run_id,
+            state.leads,
+            state.verdicts,
+            state.emails,
+            exports_dir=self._effective_exports_dir(),
+        )
 
         return ResurrectResponse(
             verdict=new_verdict,
@@ -646,6 +666,13 @@ class RunManager:
         )
         if any_sent:
             state.phase = PipelinePhase.DISPATCHED
+        persist_verified_leads_csv(
+            state.run_id,
+            state.leads,
+            state.verdicts,
+            state.emails,
+            exports_dir=self._effective_exports_dir(),
+        )
         return response
 
 

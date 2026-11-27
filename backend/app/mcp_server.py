@@ -24,10 +24,12 @@ from app.models.schemas import (  # noqa: E402
     ExecutionMode,
     LeadRecord,
     RunStateSnapshot,
+    SlayerVerdict,
     SlayingLevel,
     StartupInput,
 )
 from app.services.lead_loader import load_preset_leads  # noqa: E402
+from app.streaming.exporter import persist_verified_leads_csv  # noqa: E402
 
 mcp = MCPServer(
     name="leadslayer-ops-mcp",
@@ -518,6 +520,14 @@ async def run_leadslayer_campaign(
     tmp.write_text(json.dumps(state_payload, indent=2), encoding="utf-8")
     os.replace(tmp, state_file)
 
+    verified_csv_path = persist_verified_leads_csv(
+        safe_run,
+        list(leads_by_id.values()),
+        verdicts,
+        emails,
+        exports_dir=EXPORTS_DIR,
+    )
+
     mail_st = get_mail_status()
     mailbox_attached = bool(mail_st.smtp_configured or mail_st.gmail_configured)
     killed_n = sum(1 for v in verdicts.values() if not v.survived)
@@ -530,6 +540,7 @@ async def run_leadslayer_campaign(
             "total_evaluated": len(verdicts),
             "killed_count": killed_n,
             "survivor_count": len(numbered_survivors),
+            "verified_leads_csv": str(verified_csv_path),
             "mailbox_attached": mailbox_attached,
             "active_mail_provider": mail_st.active_provider,
             "sender_email": mail_st.smtp_sender or "Not attached (will run Sandbox simulation)",
@@ -645,6 +656,18 @@ async def dispatch_campaign_emails(
     receipts_file = EXPORTS_DIR / safe_run / "dispatch_receipts.json"
     receipts_file.write_text(resp.model_dump_json(indent=2), encoding="utf-8")
 
+    verdicts_map = {
+        lid: SlayerVerdict.model_validate(v)
+        for lid, v in raw.get("verdicts", {}).items()
+    }
+    verified_csv_path = persist_verified_leads_csv(
+        safe_run,
+        list(leads_by_id.values()),
+        verdicts_map,
+        emails,
+        exports_dir=EXPORTS_DIR,
+    )
+
     summary_lines = [
         f"- **Delivery Mode:** `{effective_mode}` ({'Real Inbox Delivery' if effective_mode != 'SANDBOX' else 'Safe Sandbox Simulation — No external mailbox attached'})",
         f"- **Selected Leads:** {len(target_ids)}",
@@ -655,6 +678,7 @@ async def dispatch_campaign_emails(
         run_id=safe_run,
         product_name=raw.get("product_name", "LeadSlayer"),
         summary_markdown="\n".join(summary_lines),
+        survivors_csv=verified_csv_path.read_text(encoding="utf-8"),
     )
 
     return json.dumps(
@@ -665,6 +689,7 @@ async def dispatch_campaign_emails(
             "selected_lead_ids": target_ids,
             "dispatched_count": resp.dispatched_count,
             "blocked_count": resp.blocked_count,
+            "verified_leads_csv": str(verified_csv_path),
             "receipts_file": str(receipts_file),
             "receipts": [r.model_dump(mode="json") for r in resp.receipts],
             "verification_summary": (

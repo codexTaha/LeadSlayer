@@ -9,6 +9,7 @@ import type {
   PresetResponse,
   ResurrectResponse,
   RunStateSnapshot,
+  SavedExportSummary,
   SMTPConnectRequest,
   StartupInput,
 } from "@/types/contracts";
@@ -133,4 +134,11 @@ export function getStreamUrl(runId: string): string {
 
 export function getExportUrl(runId: string, format: "csv" | "json"): string {
   return `${API_BASE}/api/pipeline/${runId}/export?format=${format}`;
+}
+
+export async function fetchSavedExports(): Promise<SavedExportSummary[]> {
+  const res = await fetch(`${API_BASE}/api/pipeline/exports`, {
+    cache: "no-store",
+  });
+  return handleJson<SavedExportSummary[]>(res);
 }

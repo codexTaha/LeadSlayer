@@ -221,10 +221,10 @@ export function DispatchExportBar() {
             <a
               href={getExportUrl(runId, "csv")}
               download
-              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-2.5 text-xs font-medium text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-semibold text-emerald-200 hover:border-emerald-400 hover:bg-emerald-500/20 transition"
             >
               <Download className="h-3.5 w-3.5 text-emerald-400" />
-              Export (.CSV)
+              Download Verified Leads (.CSV)
             </a>
 
             <a

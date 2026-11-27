@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
   Cpu,
+  Download,
   FileSpreadsheet,
   Globe,
   Layers,
@@ -23,10 +24,10 @@ import { AntiICPLockStrip } from "@/components/audit/AntiICPLockStrip";
 import { ICPCardsGrid } from "@/components/audit/ICPCardsGrid";
 import { MarketAuditCard } from "@/components/audit/MarketAuditCard";
 import { SlayingLevelSelector } from "@/components/audit/SlayingLevelSelector";
-import { fetchDemoPreset, parseCsvLeads } from "@/lib/api";
+import { fetchDemoPreset, fetchSavedExports, parseCsvLeads } from "@/lib/api";
 import { ORBIX_PRESET_LEADS, ORBIX_PRESET_STARTUP } from "@/lib/presets";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
-import type { LeadSourceType } from "@/types/contracts";
+import type { LeadSourceType, SavedExportSummary } from "@/types/contracts";
 
 interface AuditWorkspaceProps {
   onLaunch: () => void;
@@ -52,6 +53,13 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
   const [csvLabel, setCsvLabel] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showLockedConfig, setShowLockedConfig] = useState(false);
+  const [savedExports, setSavedExports] = useState<SavedExportSummary[]>([]);
+
+  useEffect(() => {
+    void fetchSavedExports()
+      .then((items) => setSavedExports(items))
+      .catch(() => {});
+  }, [phase]);
 
   const isLocked = phase !== "IDLE" && phase !== "ERROR";
 
@@ -651,6 +659,45 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
       <MarketAuditCard />
       <AntiICPLockStrip />
       <ICPCardsGrid />
+
+      {savedExports.length > 0 && (
+        <section className="rounded-xl border border-stone-700/60 bg-[#201D1A] p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-emerald-300">
+              <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+              Saved Verified Lead CSV Exports
+            </div>
+            <span className="text-[11px] font-mono text-zinc-500">
+              Web &amp; MCP Runs
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {savedExports.slice(0, 6).map((item) => (
+              <div
+                key={item.run_id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-zinc-100">
+                    {item.product_name}
+                  </div>
+                  <div className="text-[11px] font-mono text-zinc-400">
+                    {item.verified_count} verified · {item.run_id}
+                  </div>
+                </div>
+                <a
+                  href={item.csv_url}
+                  download
+                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 transition"
+                >
+                  <Download className="h-3 w-3 text-emerald-400" />
+                  CSV
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

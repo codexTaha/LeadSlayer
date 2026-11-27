@@ -385,3 +385,11 @@ export interface SMTPConnectRequest {
   postal_address?: string;
   verify_connection?: boolean;
 }
+
+export interface SavedExportSummary {
+  run_id: string;
+  product_name: string;
+  verified_count: number;
+  updated_at_ms: number;
+  csv_url: string;
+}

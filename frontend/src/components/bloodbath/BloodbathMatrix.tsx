@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Globe, Search } from "lucide-react";
+import { ArrowRight, Download, Globe, Search } from "lucide-react";
 import { LeadTile } from "@/components/bloodbath/LeadTile";
 import { SlayerAutopsyBar } from "@/components/bloodbath/SlayerAutopsyBar";
+import { getExportUrl } from "@/lib/api";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 
 export function BloodbathMatrix() {
+  const runId = useLeadSlayerStore((s) => s.runId);
   const leadOrder = useLeadSlayerStore((s) => s.leadOrder);
   const phase = useLeadSlayerStore((s) => s.phase);
   const setActiveViewTab = useLeadSlayerStore((s) => s.setActiveViewTab);
@@ -28,16 +30,28 @@ export function BloodbathMatrix() {
         </div>
 
         {(phase === "READY" || phase === "DISPATCHED" || phase === "SNIPING") && (
-          <button
-            type="button"
-            onClick={() => {
-              setActiveViewTab("SNIPER");
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3.5 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 cursor-pointer"
-          >
-            Open Sniper Command Deck
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {runId && (
+              <a
+                href={getExportUrl(runId, "csv")}
+                download
+                className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-200 hover:border-emerald-500/50 hover:bg-zinc-800 transition"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-400" />
+                Download Verified Leads (.CSV)
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveViewTab("SNIPER");
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3.5 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 cursor-pointer"
+            >
+              Open Sniper Command Deck
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
 

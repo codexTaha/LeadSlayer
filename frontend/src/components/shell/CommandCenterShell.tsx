@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Crosshair, PlugZap, RotateCcw } from "lucide-react";
+import { Crosshair, Download, PlugZap, RotateCcw } from "lucide-react";
 import { PhaseStepper } from "@/components/shell/PhaseStepper";
 import { ErrorAlertBanner } from "@/components/shell/ErrorAlertBanner";
-import { fetchMcpStatus } from "@/lib/api";
+import { fetchMcpStatus, getExportUrl } from "@/lib/api";
 import { SLAYING_LEVELS } from "@/lib/constants";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 import type { MCPStatusResponse } from "@/types/contracts";
@@ -18,6 +18,7 @@ export function CommandCenterShell({
   children,
   onRetryRun,
 }: CommandCenterShellProps) {
+  const runId = useLeadSlayerStore((s) => s.runId);
   const phase = useLeadSlayerStore((s) => s.phase);
   const executionMode = useLeadSlayerStore((s) => s.executionMode);
   const setExecutionMode = useLeadSlayerStore((s) => s.setExecutionMode);
@@ -35,6 +36,9 @@ export function CommandCenterShell({
 
   const levelMeta = SLAYING_LEVELS[slayingLevel];
   const canToggleMode = phase === "IDLE" || phase === "READY" || phase === "ERROR";
+  const canDownloadCsv =
+    Boolean(runId) &&
+    (phase === "SNIPING" || phase === "READY" || phase === "DISPATCHED");
 
   return (
     <div
@@ -126,6 +130,17 @@ export function CommandCenterShell({
                 />
                 {executionMode === "LIVE" ? "LIVE GEMINI" : "RECORDED REPLAY"}
               </button>
+
+              {canDownloadCsv && runId && (
+                <a
+                  href={getExportUrl(runId, "csv")}
+                  download
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/45 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/25"
+                >
+                  <Download className="h-3.5 w-3.5 text-emerald-400" />
+                  Verified CSV
+                </a>
+              )}
 
               {phase !== "IDLE" && (
                 <button

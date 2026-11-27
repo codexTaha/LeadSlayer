@@ -2,14 +2,23 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.config import EXPORTS_DIR
+
 if TYPE_CHECKING:
+    from app.models.schemas import EmailDraft, LeadRecord, SlayerVerdict
     from app.streaming.run_manager import RunState
 
 
-def build_survivors_csv(run_state: "RunState") -> str:
-    """Builds RFC-4180 CSV of all surviving (and resurrected) leads + emails."""
+def build_verified_leads_csv(
+    leads: list["LeadRecord"],
+    verdicts: dict[str, "SlayerVerdict"],
+    emails: dict[str, "EmailDraft"],
+) -> str:
+    """Builds RFC-4180 CSV of all surviving/verified (and resurrected) leads + emails."""
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(
@@ -18,8 +27,17 @@ def build_survivors_csv(run_state: "RunState") -> str:
             "full_name",
             "role",
             "company",
+            "domain",
+            "industry",
+            "funding_stage",
             "email",
+            "email_status",
+            "mx_provider",
+            "source_channel",
+            "linkedin_url",
             "employee_count",
+            "tech_stack",
+            "recent_signal",
             "qualification_score",
             "icp_similarity_score",
             "resurrected_by_user",
@@ -31,19 +49,28 @@ def build_survivors_csv(run_state: "RunState") -> str:
         ]
     )
 
-    for lead in run_state.leads:
-        verdict = run_state.verdicts.get(lead.id)
+    for lead in leads:
+        verdict = verdicts.get(lead.id)
         if verdict is None or not verdict.survived:
             continue
-        draft = run_state.emails.get(lead.id)
+        draft = emails.get(lead.id)
         writer.writerow(
             [
                 lead.id,
                 lead.full_name,
                 lead.role,
                 lead.company,
+                lead.domain,
+                lead.industry,
+                lead.funding_stage,
                 lead.email,
+                lead.email_status,
+                lead.mx_provider,
+                lead.source_channel,
+                lead.linkedin_url,
                 lead.employee_count,
+                "; ".join(lead.tech_stack),
+                lead.recent_signal,
                 verdict.qualification_score,
                 round(verdict.icp_similarity_score, 4),
                 verdict.resurrected_by_user,
@@ -56,6 +83,29 @@ def build_survivors_csv(run_state: "RunState") -> str:
         )
 
     return buffer.getvalue()
+
+
+def build_survivors_csv(run_state: "RunState") -> str:
+    """Builds RFC-4180 CSV of all surviving (and resurrected) leads + emails."""
+    return build_verified_leads_csv(run_state.leads, run_state.verdicts, run_state.emails)
+
+
+def persist_verified_leads_csv(
+    run_id: str,
+    leads: list["LeadRecord"],
+    verdicts: dict[str, "SlayerVerdict"],
+    emails: dict[str, "EmailDraft"],
+    exports_dir: Path = EXPORTS_DIR,
+) -> Path:
+    """Atomically writes exports/<run_id>/verified_leads.csv with all verified survivors."""
+    safe_run = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in run_id).strip("_") or "run"
+    run_dir = exports_dir / safe_run
+    run_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = run_dir / "verified_leads.csv"
+    tmp_path = run_dir / "verified_leads.csv.tmp"
+    tmp_path.write_text(build_verified_leads_csv(leads, verdicts, emails), encoding="utf-8")
+    os.replace(tmp_path, csv_path)
+    return csv_path
 
 
 def build_kill_audit_json(run_state: "RunState") -> dict[str, Any]:

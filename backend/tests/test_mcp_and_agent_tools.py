@@ -353,3 +353,27 @@ async def test_mcp_campaign_and_selective_dispatch_simulation_fallback(tmp_path:
     assert disp_res["selected_lead_ids"][1] == camp_res["numbered_survivors"][2]["lead_id"]
     assert Path(disp_res["receipts_file"]).is_file()
     assert (exports_dir / camp_res["run_id"] / "executive_brief.md").is_file()
+    verified_csv = exports_dir / camp_res["run_id"] / "verified_leads.csv"
+    assert verified_csv.is_file()
+    assert disp_res["verified_leads_csv"] == str(verified_csv)
+
+    import csv
+    import io
+    from app.routers import pipeline_router as pr_mod
+
+    monkeypatch.setattr(pr_mod, "EXPORTS_DIR", exports_dir)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        list_res = await client.get("/api/pipeline/exports")
+        assert list_res.status_code == 200
+        items = list_res.json()
+        assert any(it["run_id"] == camp_res["run_id"] and it["verified_count"] >= 5 for it in items)
+
+        dl_res = await client.get(f"/api/pipeline/{camp_res['run_id']}/export?format=csv")
+        assert dl_res.status_code == 200
+        assert "text/csv" in dl_res.headers["content-type"]
+        rows = list(csv.DictReader(io.StringIO(dl_res.text)))
+        assert len(rows) >= 5
+        assert {"domain", "email_status", "mx_provider", "source_channel"}.issubset(rows[0].keys())
+        dispatched_rows = [r for r in rows if r["lead_id"] in disp_res["selected_lead_ids"]]
+        assert all(r["dispatch_status"] == "SENT" for r in dispatched_rows)

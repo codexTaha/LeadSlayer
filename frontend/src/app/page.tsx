@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Cpu, Terminal } from "lucide-react";
 import { AuditWorkspace } from "@/components/audit/AuditWorkspace";
@@ -9,7 +9,7 @@ import { LeadAutopsyDrawer } from "@/components/bloodbath/LeadAutopsyDrawer";
 import { CommandCenterShell } from "@/components/shell/CommandCenterShell";
 import { SniperDeck } from "@/components/sniper/SniperDeck";
 import { useLeadSlayerStream } from "@/hooks/useLeadSlayerStream";
-import { fetchDemoPreset, startPipeline } from "@/lib/api";
+import { startPipeline } from "@/lib/api";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 import type { PipelinePhase } from "@/types/contracts";
 
@@ -42,33 +42,12 @@ export default function CommandCenterPage() {
   const phase = useLeadSlayerStore((s) => s.phase);
   const activeViewTab = useLeadSlayerStore((s) => s.activeViewTab);
   const startupInput = useLeadSlayerStore((s) => s.startupInput);
-  const leadOrder = useLeadSlayerStore((s) => s.leadOrder);
   const agentLogs = useLeadSlayerStore((s) => s.agentLogs);
-  const setPresetData = useLeadSlayerStore((s) => s.setPresetData);
-  const setIsLoadingPreset = useLeadSlayerStore((s) => s.setIsLoadingPreset);
   const setIsStartingRun = useLeadSlayerStore((s) => s.setIsStartingRun);
   const beginRun = useLeadSlayerStore((s) => s.beginRun);
   const setError = useLeadSlayerStore((s) => s.setError);
 
   const [logsExpanded, setLogsExpanded] = useState(false);
-
-  const loadDefaultPreset = useCallback(async () => {
-    setIsLoadingPreset(true);
-    try {
-      const preset = await fetchDemoPreset();
-      setPresetData(preset.startup, preset.leads);
-    } catch {
-      // Non-fatal on initial mount; user can click Load Preset button
-    } finally {
-      setIsLoadingPreset(false);
-    }
-  }, [setIsLoadingPreset, setPresetData]);
-
-  useEffect(() => {
-    if (leadOrder.length === 0 && !startupInput.product_name) {
-      void loadDefaultPreset();
-    }
-  }, [leadOrder.length, startupInput.product_name, loadDefaultPreset]);
 
   const handleLaunch = useCallback(async () => {
     setIsStartingRun(true);

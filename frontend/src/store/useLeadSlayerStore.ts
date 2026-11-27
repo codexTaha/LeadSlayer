@@ -29,8 +29,8 @@ const DEFAULT_STARTUP_INPUT: StartupInput = {
   slaying_level: "RUTHLESS",
   execution_mode: "LIVE",
   leads: null,
-  lead_sources: ["CSV_PRESET"],
-  auto_discover_leads: false,
+  lead_sources: ["AI_SEARCH", "LINKEDIN_SEARCH"],
+  auto_discover_leads: true,
   target_lead_count: 15,
   target_qualified_leads: 10,
 };

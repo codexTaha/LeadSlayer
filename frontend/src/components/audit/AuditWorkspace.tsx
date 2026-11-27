@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -12,11 +12,9 @@ import {
   Globe,
   Layers,
   Loader2,
-  Package,
   Play,
   Search,
   SlidersHorizontal,
-  Sparkles,
   Upload,
   Users,
 } from "lucide-react";
@@ -24,8 +22,7 @@ import { AntiICPLockStrip } from "@/components/audit/AntiICPLockStrip";
 import { ICPCardsGrid } from "@/components/audit/ICPCardsGrid";
 import { MarketAuditCard } from "@/components/audit/MarketAuditCard";
 import { SlayingLevelSelector } from "@/components/audit/SlayingLevelSelector";
-import { fetchDemoPreset, fetchSavedExports, parseCsvLeads } from "@/lib/api";
-import { ORBIX_PRESET_LEADS, ORBIX_PRESET_STARTUP } from "@/lib/presets";
+import { fetchSavedExports, parseCsvLeads } from "@/lib/api";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 import type { LeadSourceType, SavedExportSummary } from "@/types/contracts";
 
@@ -39,10 +36,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
   const leadOrder = useLeadSlayerStore((s) => s.leadOrder);
   const marketAudit = useLeadSlayerStore((s) => s.marketAudit);
   const icps = useLeadSlayerStore((s) => s.icps);
-  const isLoadingPreset = useLeadSlayerStore((s) => s.isLoadingPreset);
   const isStartingRun = useLeadSlayerStore((s) => s.isStartingRun);
-  const setIsLoadingPreset = useLeadSlayerStore((s) => s.setIsLoadingPreset);
-  const setPresetData = useLeadSlayerStore((s) => s.setPresetData);
   const setCustomLeads = useLeadSlayerStore((s) => s.setCustomLeads);
   const setLeadSources = useLeadSlayerStore((s) => s.setLeadSources);
   const updateStartupInput = useLeadSlayerStore((s) => s.updateStartupInput);
@@ -63,28 +57,6 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
 
   const isLocked = phase !== "IDLE" && phase !== "ERROR";
 
-  const handleLoadSample = async () => {
-    setIsLoadingPreset(true);
-    setError(null);
-    try {
-      const preset = await fetchDemoPreset();
-      setPresetData(preset.startup, preset.leads);
-      setCsvLabel("50-Lead Adversarial Swarm Ready");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load 50-lead preset."
-      );
-    } finally {
-      setIsLoadingPreset(false);
-    }
-  };
-
-  const handleLoadOrbix = () => {
-    setError(null);
-    setPresetData(ORBIX_PRESET_STARTUP, ORBIX_PRESET_LEADS);
-    setCsvLabel("Orbix Packaging · 15-Lead Custom Swarm Ready");
-  };
-
   const handleCsvFile = async (file: File) => {
     setError(null);
     try {
@@ -101,7 +73,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
   const activeSources: LeadSourceType[] =
     startupInput.lead_sources && startupInput.lead_sources.length > 0
       ? startupInput.lead_sources
-      : ["CSV_PRESET"];
+      : ["AI_SEARCH", "LINKEDIN_SEARCH"];
   const hasAi = activeSources.includes("AI_SEARCH");
   const hasLi = activeSources.includes("LINKEDIN_SEARCH");
   const hasCsv = activeSources.includes("CSV_PRESET");
@@ -113,9 +85,6 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
       ? activeSources.filter((s) => s !== src)
       : [...activeSources, src];
     setLeadSources(next);
-    if (src === "CSV_PRESET" && !exists && leadOrder.length === 0) {
-      void handleLoadSample();
-    }
   };
 
   const canLaunch =
@@ -194,41 +163,6 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                   <ChevronUp className="h-3.5 w-3.5" />
                 </button>
               )}
-              <div className="inline-flex items-center gap-1.5 rounded-xl border border-stone-700/70 bg-[#23201D] p-1.5 shadow-md">
-                <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-stone-400">
-                  Presets
-                </span>
-                <button
-                  type="button"
-                  disabled={isLocked || isLoadingPreset}
-                  onClick={handleLoadOrbix}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer disabled:opacity-50 ${
-                    startupInput.product_name === "Orbix Packaging"
-                      ? "bg-emerald-500/25 text-emerald-100 border border-emerald-400/50"
-                      : "text-stone-300 hover:bg-stone-800/70"
-                  }`}
-                >
-                  <Package className="h-3.5 w-3.5 text-emerald-400" />
-                  Orbix Packaging (15)
-                </button>
-                <button
-                  type="button"
-                  disabled={isLocked || isLoadingPreset}
-                  onClick={handleLoadSample}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer disabled:opacity-50 ${
-                    startupInput.product_name === "KubeGuard AI"
-                      ? "bg-amber-500/25 text-amber-100 border border-amber-400/50"
-                      : "text-stone-300 hover:bg-stone-800/70"
-                  }`}
-                >
-                  {isLoadingPreset ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                  )}
-                  KubeGuard AI (50)
-                </button>
-              </div>
             </div>
           </div>
 
@@ -260,7 +194,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                     onChange={(e) =>
                       updateStartupInput({ product_name: e.target.value })
                     }
-                    placeholder="e.g. Orbix Packaging"
+                    placeholder="e.g. Acme Cloud"
                     className="w-full rounded-xl border border-indigo-300/20 bg-[#151826] px-3.5 py-2.5 text-sm text-stone-100 placeholder:text-stone-500 focus:border-indigo-400 focus:outline-none disabled:opacity-60"
                   />
                 </div>
@@ -276,7 +210,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                     onChange={(e) =>
                       updateStartupInput({ product_url: e.target.value })
                     }
-                    placeholder="https://orbixpackaging.com"
+                    placeholder="https://example.com"
                     className="w-full rounded-xl border border-indigo-300/20 bg-[#151826] px-3.5 py-2.5 text-sm text-stone-100 placeholder:text-stone-500 focus:border-indigo-400 focus:outline-none disabled:opacity-60"
                   />
                 </div>
@@ -310,7 +244,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                   onChange={(e) =>
                     updateStartupInput({ founder_assumptions: e.target.value })
                   }
-                  placeholder="e.g. Any e-commerce brand with physical goods needs custom boxes..."
+                  placeholder="e.g. Any company in this market needs our solution..."
                   className="w-full rounded-xl border border-indigo-300/20 bg-[#151826] px-3.5 py-2.5 text-sm leading-relaxed text-stone-100 placeholder:text-stone-500 focus:border-indigo-400 focus:outline-none disabled:opacity-60 resize-none"
                 />
               </div>

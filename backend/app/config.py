@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # Accepts a single key OR a comma-separated pool: key1,key2,key3
     gemini_api_key: str = ""
     gemini_brain_model: str = "gemini-4-hydrogen"
     gemini_workhorse_model: str = "gemini-3.5-flash-lite"
@@ -51,6 +52,11 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def gemini_api_key_pool(self) -> list[str]:
+        """Return all API keys; supports comma-separated pool: key1,key2,key3."""
+        return [k.strip() for k in self.gemini_api_key.split(",") if k.strip()]
 
 
 settings = Settings()

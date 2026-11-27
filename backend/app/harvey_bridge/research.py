@@ -11,7 +11,31 @@ from app.config import settings
 from app.harvey_bridge import ensure_harvey_on_path
 from app.services.url_fetcher import detect_tech_signals, extract_readable_text, is_safe_public_url
 
+import re
+
 ensure_harvey_on_path()
+
+# Detect parked domains or domain-for-sale landing pages (e.g. Spaceship, Sedo, GoDaddy)
+_PARKED_DOMAIN_PATTERNS = [
+    re.compile(r"domain\s+(?:is\s+)?(?:for\s+sale|parked|available)", re.I),
+    re.compile(r"buy\s+this\s+domain", re.I),
+    re.compile(r"inquire\s+about\s+this\s+domain", re.I),
+    re.compile(r"parked\s+(?:free\s+)?(?:courtesy\s+of|by|page)", re.I),
+    re.compile(r"spaceship\.com", re.I),
+    re.compile(r"sedoparking\.com|sedo\s+domain\s+parking", re.I),
+    re.compile(r"hugedomains\.com", re.I),
+    re.compile(r"dan\.com/buy-domain", re.I),
+    re.compile(r"godaddy(?:\.com)?\s+parked", re.I),
+    re.compile(r"namecheap(?:\.com)?\s+parked", re.I),
+    re.compile(r"this\s+(?:web\s*)?page\s+is\s+parked", re.I),
+    re.compile(r"under\s+construction\s+-\s+domain\s+has\s+been\s+registered", re.I),
+]
+
+
+def is_parked_page(html: str) -> bool:
+    """Return True if page HTML exhibits clear domain parking/for-sale indicators."""
+    sample = html[:50_000]
+    return any(p.search(sample) for p in _PARKED_DOMAIN_PATTERNS)
 
 from harvey.collectors.ats import detect_board, read_board  # noqa: E402
 from harvey.collectors.discover import JUNK_DOMAIN_PATTERNS  # noqa: E402
@@ -119,8 +143,11 @@ async def research_company_with_harvey(
         ) as client:
             home_resp = await client.get(safe_home)
             if home_resp.status_code < 400 and "html" in home_resp.headers.get("content-type", "").lower():
-                reachable = True
                 home_html = home_resp.text
+                if is_parked_page(home_html):
+                    # Reject parked/for-sale domain immediately
+                    return HarveyCompanyDossier(reachable=False)
+                reachable = True
                 home_url = str(home_resp.url)
                 pages.append((home_url, home_html))
                 text = extract_readable_text(home_html)

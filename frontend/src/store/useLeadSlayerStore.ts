@@ -31,6 +31,7 @@ const DEFAULT_STARTUP_INPUT: StartupInput = {
   lead_sources: ["CSV_PRESET"],
   auto_discover_leads: false,
   target_lead_count: 15,
+  target_qualified_leads: 10,
 };
 
 interface LeadSlayerState {

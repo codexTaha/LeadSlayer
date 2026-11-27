@@ -75,6 +75,7 @@ export interface StartupInput {
   lead_sources?: LeadSourceType[];
   auto_discover_leads?: boolean;
   target_lead_count?: number;
+  target_qualified_leads?: number;
 }
 
 export interface AssumptionGap {

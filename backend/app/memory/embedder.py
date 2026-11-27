@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 from google import genai
 
+from app.agents.key_rotator import key_rotator
 from app.config import settings
 from app.memory.cache import BoundedTTLEmbeddingCache, build_cache_key, normalize_text
 from app.memory.exceptions import GeminiAPIUnavailableError, is_transient_api_error
@@ -32,7 +33,7 @@ class GeminiEmbedder:
         cache: BoundedTTLEmbeddingCache | None = None,
         client: Any | None = None,
     ) -> None:
-        self._api_key = api_key if api_key is not None else settings.gemini_api_key
+        self._api_key = api_key if api_key is not None else key_rotator.next_key()
         self._model = model
         self._dim = dim
         self._batch_size = batch_size

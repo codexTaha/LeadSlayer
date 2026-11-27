@@ -425,6 +425,42 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
 
         <SlayingLevelSelector disabled={isLocked} />
 
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Target Qualified Leads Goal
+              </label>
+              <p className="text-[11px] text-zinc-500">
+                Autonomous Hunter + Slayer will hunt until reaching this number of qualified survivors (peaked at 50 for live demo).
+              </p>
+            </div>
+            <span className="font-mono text-sm font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 px-3 py-1 rounded-lg">
+              {startupInput.target_qualified_leads ?? 10} Qualified Survivors
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={5}
+              max={50}
+              step={5}
+              disabled={isLocked}
+              value={startupInput.target_qualified_leads ?? 10}
+              onChange={(e) =>
+                updateStartupInput({ target_qualified_leads: Number(e.target.value) })
+              }
+              className="w-full accent-emerald-500 cursor-pointer disabled:opacity-50"
+            />
+          </div>
+          <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+            <span>5 (Quick Test)</span>
+            <span>15 (Balanced)</span>
+            <span>30 (Deep Market)</span>
+            <span className="text-emerald-400 font-semibold">50 (Demo Max)</span>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
           <div className="text-xs text-zinc-500 font-mono">
             {phase === "IDLE"

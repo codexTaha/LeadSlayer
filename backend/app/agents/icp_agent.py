@@ -40,7 +40,7 @@ async def execute_icp_engine(
     )
 
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),

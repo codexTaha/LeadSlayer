@@ -26,7 +26,7 @@ async def _run_optional_search_grounding(startup: StartupInput) -> str | None:
         return None
     try:
         client = genai.Client(
-            api_key=settings.gemini_api_key,
+            api_key=key_rotator.next_key(),
             http_options=genai.types.HttpOptions(
                 retry_options=genai.types.HttpRetryOptions(attempts=1)
             ),
@@ -84,7 +84,7 @@ async def execute_market_audit(
 
     user_prompt = "\n\n".join(prompt_parts)
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),

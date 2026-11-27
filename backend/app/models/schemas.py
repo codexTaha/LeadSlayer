@@ -101,6 +101,8 @@ class StartupInput(BaseModel):
     lead_sources: list[LeadSourceType] = Field(default_factory=lambda: ["CSV_PRESET"])
     auto_discover_leads: bool = False
     target_lead_count: int = Field(default=15, ge=5, le=30)
+    # How many QUALIFIED survivors the loop must reach before stopping (1–50).
+    target_qualified_leads: int = Field(default=10, ge=1, le=50)
 
 
 class AssumptionGap(BaseModel):

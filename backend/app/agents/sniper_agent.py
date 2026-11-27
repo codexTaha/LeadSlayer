@@ -109,7 +109,7 @@ async def draft_email_for_lead(
     )
 
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),
@@ -167,7 +167,7 @@ async def execute_sniper_swarm(
     memory_store = memory_registry.get(run_id)
     icp_by_id = {icp.id: icp for icp in icps}
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),

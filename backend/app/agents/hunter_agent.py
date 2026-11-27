@@ -12,7 +12,7 @@ from google.adk.events import Event, EventActions
 from pydantic import ConfigDict
 
 from app.agents.interface import PipelineCallbacks
-from app.agents.rate_limiter import GentleAdaptiveExecutor
+from app.agents.rate_limiter import GentleAdaptiveExecutor, key_rotator
 from app.agents.structured_outputs import (
     DiscoveredLeadBatch,
     DiscoveredLeadCandidate,
@@ -63,8 +63,9 @@ async def _run_grounded_gemini_search(
     prompt: str,
     client: Any | None = None,
 ) -> tuple[str, list[str], bool]:
+    _api_key = key_rotator.next_key()
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=_api_key,
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),
@@ -73,6 +74,7 @@ async def _run_grounded_gemini_search(
     if client is None:
         search_models: list[tuple[str, bool]] = [
             ("gemini-2.5-flash", True),
+            ("gemini-3.8-flash", True),
             (settings.gemini_brain_model, True),
             (settings.gemini_workhorse_model, False),
         ]
@@ -104,9 +106,21 @@ async def _run_grounded_gemini_search(
                 uri = getattr(getattr(ch, "web", None), "uri", None)
                 if uri:
                     grounding_urls.append(uri)
+            if client is None:
+                key_rotator.mark_ok(_api_key)
             return text, grounding_urls, use_search
         except Exception as exc:
             last_exc = exc
+            # Mark key throttled so rotator skips it next round
+            if client is None and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(_api_key)
+                _api_key = key_rotator.next_key()
+                genai_client = genai.Client(
+                    api_key=_api_key,
+                    http_options=genai.types.HttpOptions(
+                        retry_options=genai.types.HttpRetryOptions(attempts=1)
+                    ),
+                )
             if not use_search and is_transient_api_error(exc):
                 raise
             continue
@@ -125,7 +139,7 @@ async def _extract_structured_candidates(
     client: Any | None = None,
 ) -> list[DiscoveredLeadCandidate]:
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),
@@ -171,15 +185,60 @@ async def _search_ai_candidates(
     callbacks: PipelineCallbacks,
     client: Any | None = None,
 ) -> tuple[list[DiscoveredLeadCandidate], list[str]]:
+    desired_qualified = getattr(startup, "target_qualified_leads", 10) or 10
+    multiplier = 2.0 if startup.slaying_level.value == "RUTHLESS" else 1.5
+    target_needed = max(startup.target_lead_count, min(75, int(desired_qualified * multiplier)))
+
     await callbacks.on_log(
-        f"[HunterSwarm · AI Search] Hunting live web companies matching {startup.product_name} ICPs..."
+        f"[HunterSwarm · AI Search] Hunting live web companies matching {startup.product_name} ICPs (target: {target_needed} candidates)..."
     )
+
+    # If target_needed > 25 and multiple ICPs exist, shard across ICPs for deep market coverage
+    if target_needed > 25 and len(icps) >= 2:
+        per_icp_target = max(10, min(25, int(target_needed / len(icps)) + 2))
+        all_cands: list[DiscoveredLeadCandidate] = []
+        all_srcs: list[str] = []
+
+        for idx, icp in enumerate(icps, start=1):
+            icp_single_text = (
+                f"- {icp.id} ({icp.name}): roles={icp.target_roles}, size={icp.min_employees}-{icp.max_employees}, "
+                f"signals={icp.required_tech_signals}, triggers={icp.buying_triggers}"
+            )
+            prompt = (
+                f"Search the live web and find {per_icp_target} REAL operating companies (with exact official domains) for:\n"
+                f"Seller Product: {startup.product_name} ({startup.product_url or 'N/A'})\n"
+                f"Description: {startup.description}\n\n"
+                f"Specific ICP Angle {idx}/{len(icps)}: {icp.name}\n{icp_single_text}\n\n"
+                f"Requirements:\n"
+                f"1. Target mid-market/growth companies (20-300 employees) matching this specific ICP with verifiable commercial signals.\n"
+                f"2. Exclude {_normalize_root_domain(startup.product_url) or startup.product_name} and directory/social sites.\n"
+                f"3. Include company name, official domain, likely buyer role, any real public executive name, industry, headcount, stage, and concrete signal."
+            )
+            try:
+                notes, urls, used_search = await _run_grounded_gemini_search(prompt, client=client)
+                await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
+                cands = await _extract_structured_candidates(
+                    notes, urls, per_icp_target, callbacks, used_live_search=used_search, client=client
+                )
+                all_cands.extend(cands)
+                all_srcs.append("AI Google Search" if used_search else "AI Candidate Search")
+            except Exception as e:
+                await callbacks.on_log(f"[HunterSwarm · AI Search] Shard for {icp.name} note: {e}")
+                continue
+
+        if all_cands:
+            await callbacks.on_log(
+                f"[HunterSwarm · AI Search] Sharded hunt yielded {len(all_cands)} company candidates across {len(icps)} ICPs."
+            )
+            return all_cands, list(dict.fromkeys(all_srcs))
+
+    # Single-pass search for standard volumes
     icp_text = "\n".join(
         f"- {icp.id} ({icp.name}): roles={icp.target_roles}, size={icp.min_employees}-{icp.max_employees}, "
         f"signals={icp.required_tech_signals}, triggers={icp.buying_triggers}"
         for icp in icps
     )
-    target_n = startup.target_lead_count
+    target_n = min(target_needed, 30)
     prompt = (
         f"Search the live web and find {target_n} REAL operating companies (with exact official domains) for:\n"
         f"Seller Product: {startup.product_name} ({startup.product_url or 'N/A'})\n"
@@ -206,6 +265,10 @@ async def _search_linkedin_candidates(
     callbacks: PipelineCallbacks,
     client: Any | None = None,
 ) -> tuple[list[DiscoveredLeadCandidate], list[str]]:
+    desired_qualified = getattr(startup, "target_qualified_leads", 10) or 10
+    multiplier = 2.0 if startup.slaying_level.value == "RUTHLESS" else 1.5
+    target_needed = max(startup.target_lead_count, min(60, int(desired_qualified * multiplier)))
+
     target_roles = list(dict.fromkeys(r for icp in icps for r in icp.target_roles))[:6]
     keywords = startup.product_name
     sources: list[str] = []
@@ -219,7 +282,7 @@ async def _search_linkedin_candidates(
         raw_profiles = await search_linkedin_via_harvey_browser(
             keywords=keywords,
             title=" ".join(target_roles[:2]),
-            max_results=min(10, startup.target_lead_count),
+            max_results=min(15, target_needed),
         )
         for prof in raw_profiles:
             comp = prof.get("company", "").strip()
@@ -245,9 +308,9 @@ async def _search_linkedin_candidates(
             sources.append("Harvey LinkedIn Browser")
 
     # Path B: Accountless LinkedIn X-Ray Search via Gemini Search Grounding (always works at $0!)
-    if len(browser_cands) < startup.target_lead_count:
+    if len(browser_cands) < target_needed:
         await callbacks.on_log(
-            "[HunterSwarm · LinkedIn] Discovering real LinkedIn decision-makers & company pages (site:linkedin.com/in)..."
+            f"[HunterSwarm · LinkedIn] Discovering real LinkedIn decision-makers & company pages (site:linkedin.com/in, target: {target_needed})..."
         )
         icp_text = "\n".join(
             f"- {icp.name}: roles={icp.target_roles}, signals={icp.required_tech_signals}"
@@ -255,7 +318,7 @@ async def _search_linkedin_candidates(
         )
         prompt = (
             f"Run LinkedIn X-Ray prospecting (`site:linkedin.com/in` and company research) to find "
-            f"{startup.target_lead_count} REAL named decision-makers (with their real title, real company name, "
+            f"{target_needed} REAL named decision-makers (with their real title, real company name, "
             f"real company website domain, and LinkedIn profile URL if found) matching:\n"
             f"Seller Product: {startup.product_name} — {startup.description}\n"
             f"Target Buyer Profiles:\n{icp_text}\n\n"
@@ -266,7 +329,7 @@ async def _search_linkedin_candidates(
         xray_cands = await _extract_structured_candidates(
             notes,
             urls,
-            startup.target_lead_count,
+            target_needed,
             callbacks,
             used_live_search=True if client is not None else used_search,
             client=client,
@@ -385,7 +448,10 @@ async def discover_leads_via_harvey_and_search(
                 source_labels.append(s)
 
     own_domain = _normalize_root_domain(startup.product_url)
-    merged = _merge_candidate_pools(ai_cands, li_cands, own_domain, startup.target_lead_count)
+    desired_qualified = getattr(startup, "target_qualified_leads", 10) or 10
+    multiplier = 2.0 if startup.slaying_level.value == "RUTHLESS" else 1.5
+    needed_pool = max(startup.target_lead_count, min(100, int(desired_qualified * multiplier)))
+    merged = _merge_candidate_pools(ai_cands, li_cands, own_domain, needed_pool)
 
     await callbacks.on_log(
         f"[HunterSwarm] Merged {len(merged)} unique companies — running Harvey $0 site crawl, owner extractor, ATS job scan & DNS MX check..."
@@ -510,7 +576,7 @@ async def _generate_hunt_queries(
         for icp in icps
     )
     genai_client = client or genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),
@@ -554,7 +620,7 @@ async def _enrich_sparse_leads(
     )
 
     client = genai.Client(
-        api_key=settings.gemini_api_key,
+        api_key=key_rotator.next_key(),
         http_options=genai.types.HttpOptions(
             retry_options=genai.types.HttpRetryOptions(attempts=1)
         ),

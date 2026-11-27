@@ -23,6 +23,7 @@ exports/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+frontend/.vercel/
 npm-debug.log*
 
 # OS / IDE

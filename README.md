@@ -1,13 +1,3 @@
----
-title: LeadSlayer AI
-emoji: 🎯
-colorFrom: red
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # LeadSlayer AI — Autonomous Adversarial GTM Engine
 
 > **Track:** Automating Boring Stuff · **Stack:** Google ADK 2.0 + Gemini API + Model Context Protocol (MCP) + FastAPI + Next.js

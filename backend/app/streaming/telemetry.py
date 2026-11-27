@@ -20,6 +20,7 @@ class TelemetryAggregator:
             ModelId.GEMINI_3_5_FLASH_LITE.value: 0,
             ModelId.GEMINI_EMBEDDING_2.value: 0,
         }
+        self._verdicts_by_id: dict[str, SlayerVerdict] = {}
 
     def set_total_leads(self, total_leads: int) -> None:
         self._total_leads = max(0, total_leads)
@@ -29,6 +30,23 @@ class TelemetryAggregator:
         self._model_calls[key] = self._model_calls.get(key, 0) + 1
 
     def record_verdict(self, verdict: SlayerVerdict) -> None:
+        prev = self._verdicts_by_id.get(verdict.lead_id)
+        if prev is not None:
+            self._processed_leads = max(0, self._processed_leads - 1)
+            self._latency_sum_ms = max(0, self._latency_sum_ms - max(0, prev.latency_ms))
+            if prev.survived:
+                self._survived_count = max(0, self._survived_count - 1)
+            else:
+                self._killed_count = max(0, self._killed_count - 1)
+                if prev.rejection_category is not None:
+                    cat = prev.rejection_category.value
+                    cur = self._rejection_breakdown.get(cat, 0)
+                    if cur <= 1:
+                        self._rejection_breakdown.pop(cat, None)
+                    else:
+                        self._rejection_breakdown[cat] = cur - 1
+
+        self._verdicts_by_id[verdict.lead_id] = verdict
         self._processed_leads += 1
         self._latency_sum_ms += max(0, verdict.latency_ms)
         if verdict.survived:

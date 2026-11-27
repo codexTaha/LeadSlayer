@@ -5,6 +5,7 @@ import type {
   HunterReport,
   ICPProfile,
   LeadRecord,
+  LeadSourceType,
   MarketAuditResult,
   PipelinePhase,
   RejectionCategory,
@@ -27,6 +28,9 @@ const DEFAULT_STARTUP_INPUT: StartupInput = {
   slaying_level: "RUTHLESS",
   execution_mode: "LIVE",
   leads: null,
+  lead_sources: ["CSV_PRESET"],
+  auto_discover_leads: false,
+  target_lead_count: 15,
 };
 
 interface LeadSlayerState {
@@ -56,6 +60,8 @@ interface LeadSlayerState {
   setIsStartingRun: (starting: boolean) => void;
   setPresetData: (startup: StartupInput, leads: LeadRecord[]) => void;
   setCustomLeads: (leads: LeadRecord[]) => void;
+  setLeadSources: (sources: LeadSourceType[]) => void;
+  enableAutoDiscovery: () => void;
   beginRun: (runId: string) => void;
   setActiveViewTab: (tab: ViewTab) => void;
   setSelectedLeadId: (leadId: string | null) => void;
@@ -124,6 +130,8 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
         ...startup,
         execution_mode: s.executionMode,
         leads,
+        lead_sources: ["CSV_PRESET"],
+        auto_discover_leads: false,
       },
       leadOrder,
       leadsById,
@@ -133,13 +141,57 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
 
   setCustomLeads: (leads) => {
     const { leadOrder, leadsById } = indexLeads(leads);
-    set((s) => ({
-      startupInput: { ...s.startupInput, leads },
-      leadOrder,
-      leadsById,
-      errorMessage: null,
-    }));
+    set((s) => {
+      const current = s.startupInput.lead_sources ?? ["CSV_PRESET"];
+      const nextSources: LeadSourceType[] = current.includes("CSV_PRESET")
+        ? current
+        : [...current, "CSV_PRESET"];
+      return {
+        startupInput: {
+          ...s.startupInput,
+          leads,
+          lead_sources: nextSources,
+          auto_discover_leads: nextSources.some((x) => x !== "CSV_PRESET"),
+        },
+        leadOrder,
+        leadsById,
+        errorMessage: null,
+      };
+    });
   },
+
+  setLeadSources: (sources) =>
+    set((s) => {
+      const clean: LeadSourceType[] = sources.length > 0 ? sources : ["AI_SEARCH"];
+      const usesCsv = clean.includes("CSV_PRESET");
+      const usesAuto = clean.some((x) => x === "AI_SEARCH" || x === "LINKEDIN_SEARCH");
+      return {
+        startupInput: {
+          ...s.startupInput,
+          lead_sources: clean,
+          auto_discover_leads: usesAuto,
+          leads: usesCsv ? s.startupInput.leads : null,
+          target_lead_count: s.startupInput.target_lead_count ?? 15,
+        },
+        leadOrder: usesCsv ? s.leadOrder : [],
+        leadsById: usesCsv ? s.leadsById : {},
+        errorMessage: null,
+      };
+    }),
+
+  enableAutoDiscovery: () =>
+    set((s) => ({
+      startupInput: {
+        ...s.startupInput,
+        leads: null,
+        lead_sources: ["AI_SEARCH", "LINKEDIN_SEARCH"],
+        auto_discover_leads: true,
+        target_lead_count: s.startupInput.target_lead_count ?? 15,
+      },
+      leadOrder: [],
+      leadsById: {},
+      errorMessage: null,
+    })),
 
   beginRun: (runId) =>
     set({
@@ -185,6 +237,8 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
             nextTab = "AUDIT";
           } else if (nextPhase === "HUNTING" || nextPhase === "SLAYING") {
             nextTab = "BLOODBATH";
+          } else if (nextPhase === "SNIPING") {
+            nextTab = "SNIPER";
           }
           return {
             phase: nextPhase,
@@ -218,7 +272,11 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
 
         case "leads_loaded": {
           const { leadOrder, leadsById } = indexLeads(event.payload.leads);
-          return { leadOrder, leadsById };
+          return {
+            leadOrder,
+            leadsById,
+            telemetry: event.payload.telemetry ?? s.telemetry,
+          };
         }
 
         case "lead_verdict": {

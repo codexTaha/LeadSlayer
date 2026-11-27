@@ -6,7 +6,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import CONTRACTS_DIR, DATA_DIR
+from app.config import CONTRACTS_DIR, DATA_DIR, settings
 from app.main import app
 from app.models.schemas import LeadRecord, SlayerVerdict, SlayingLevel
 from app.services.lead_loader import (
@@ -86,9 +86,9 @@ def test_stage1_api_endpoints_and_latency() -> None:
     health_data = health_res.json()
     assert health_data["status"] == "ok"
     assert health_data["default_demo_ready"] is True
-    assert health_data["models"]["brain"] == "gemini-4-hydrogen"
-    assert health_data["models"]["workhorse"] == "gemini-3.5-flash-lite"
-    assert health_data["models"]["embedding"] == "gemini-embedding-2"
+    assert health_data["models"]["brain"] == settings.gemini_brain_model
+    assert health_data["models"]["workhorse"] == settings.gemini_workhorse_model
+    assert health_data["models"]["embedding"] == settings.gemini_embedding_model
 
     start = time.perf_counter()
     preset_res = client.get("/api/demo/preset")

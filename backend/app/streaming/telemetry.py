@@ -21,6 +21,9 @@ class TelemetryAggregator:
             ModelId.GEMINI_EMBEDDING_2.value: 0,
         }
 
+    def set_total_leads(self, total_leads: int) -> None:
+        self._total_leads = max(0, total_leads)
+
     def record_model_call(self, model_id: ModelId | str) -> None:
         key = model_id.value if isinstance(model_id, ModelId) else str(model_id)
         self._model_calls[key] = self._model_calls.get(key, 0) + 1

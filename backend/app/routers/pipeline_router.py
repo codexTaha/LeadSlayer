@@ -6,9 +6,11 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sse_starlette.sse import EventSourceResponse
 
+from app.harvey_bridge.dispatcher import get_harvey_status
 from app.models.schemas import (
     DispatchRequest,
     DispatchResponse,
+    HarveyStatusResponse,
     PipelineStartResponse,
     ResurrectResponse,
     RunStateSnapshot,
@@ -25,6 +27,10 @@ from app.streaming.run_manager import (
 
 def create_pipeline_router(manager: RunManager = default_run_manager) -> APIRouter:
     router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
+
+    @router.get("/harvey-status", response_model=HarveyStatusResponse)
+    async def harvey_status() -> HarveyStatusResponse:
+        return get_harvey_status()
 
     @router.post("/start", status_code=202, response_model=PipelineStartResponse)
     async def start_pipeline(startup_input: StartupInput) -> PipelineStartResponse:
@@ -95,9 +101,13 @@ def create_pipeline_router(manager: RunManager = default_run_manager) -> APIRout
         run_id: str, payload: DispatchRequest
     ) -> DispatchResponse:
         try:
-            return manager.dispatch_emails(run_id, payload.lead_ids)
+            return await manager.dispatch_emails(
+                run_id, payload.lead_ids, delivery_mode=payload.delivery_mode
+            )
         except RunNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get("/{run_id}/export")
     async def export_run_report(

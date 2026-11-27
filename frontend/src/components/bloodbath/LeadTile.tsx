@@ -7,11 +7,16 @@ import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 
 interface LeadTileProps {
   leadId: string;
+  index?: number;
 }
 
-export const LeadTile = React.memo(function LeadTile({ leadId }: LeadTileProps) {
+export const LeadTile = React.memo(function LeadTile({
+  leadId,
+  index = 0,
+}: LeadTileProps) {
   const lead = useLeadSlayerStore((s) => s.leadsById[leadId]);
   const verdict = useLeadSlayerStore((s) => s.verdictsById[leadId]);
+  const phase = useLeadSlayerStore((s) => s.phase);
   const isSelected = useLeadSlayerStore((s) => s.selectedLeadId === leadId);
   const activeFilter = useLeadSlayerStore((s) => s.activeCategoryFilter);
   const setSelectedLeadId = useLeadSlayerStore((s) => s.setSelectedLeadId);
@@ -29,6 +34,8 @@ export const LeadTile = React.memo(function LeadTile({ leadId }: LeadTileProps) 
     : verdict.survived
       ? "SURVIVED"
       : "KILLED";
+  const isHuntingScan = status === "PENDING" && phase === "HUNTING";
+  const isSlayingQueue = status === "PENDING" && phase === "SLAYING";
 
   return (
     <motion.button
@@ -44,12 +51,29 @@ export const LeadTile = React.memo(function LeadTile({ leadId }: LeadTileProps) 
         isSelected ? "ring-2 ring-sky-400" : ""
       } ${
         status === "PENDING"
-          ? "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+          ? isHuntingScan
+            ? "border-indigo-500/40 bg-indigo-950/20 hover:border-indigo-400/60"
+            : isSlayingQueue
+              ? "border-amber-500/35 bg-zinc-900/70 hover:border-zinc-600"
+              : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
           : status === "SURVIVED"
             ? "border-emerald-500/75 bg-emerald-950/35 shadow-[0_0_16px_rgba(16,185,129,0.22)] hover:border-emerald-400"
             : "border-rose-500/35 bg-rose-950/20 hover:border-rose-400/60"
       }`}
     >
+      {isHuntingScan && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-indigo-400/15 to-transparent"
+          animate={{ x: ["-100%", "120%"] }}
+          transition={{
+            duration: 1.4,
+            repeat: Infinity,
+            delay: (index % 10) * 0.08 + Math.floor(index / 10) * 0.12,
+            ease: "easeInOut",
+          }}
+        />
+      )}
+
       {status === "KILLED" && (
         <motion.div
           initial={{ scaleX: 0 }}
@@ -71,7 +95,15 @@ export const LeadTile = React.memo(function LeadTile({ leadId }: LeadTileProps) 
         </div>
 
         {status === "PENDING" ? (
-          <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-zinc-600 animate-pulse" />
+          <span
+            className={`mt-0.5 h-2 w-2 shrink-0 rounded-full animate-pulse ${
+              isHuntingScan
+                ? "bg-indigo-400 shadow-[0_0_8px_#818cf8]"
+                : isSlayingQueue
+                  ? "bg-amber-400"
+                  : "bg-zinc-600"
+            }`}
+          />
         ) : status === "SURVIVED" ? (
           verdict?.resurrected_by_user ? (
             <RotateCcw className="h-3.5 w-3.5 shrink-0 text-amber-300" />
@@ -85,8 +117,16 @@ export const LeadTile = React.memo(function LeadTile({ leadId }: LeadTileProps) 
 
       <div className="mt-1.5 flex items-center justify-between gap-1">
         {!verdict ? (
-          <span className="truncate text-[9px] font-mono text-zinc-500">
-            {lead.role}
+          <span
+            className={`truncate text-[9px] font-mono ${
+              isHuntingScan
+                ? "text-indigo-300"
+                : isSlayingQueue
+                  ? "text-amber-300/80"
+                  : "text-zinc-500"
+            }`}
+          >
+            {isHuntingScan ? "VECTOR SCAN..." : lead.role}
           </span>
         ) : (
           <>

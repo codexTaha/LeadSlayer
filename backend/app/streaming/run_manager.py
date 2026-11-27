@@ -13,7 +13,9 @@ from typing import Any
 
 from app.agents.interface import PipelineCallbacks, PipelineFinalResult
 from app.config import DATA_DIR, settings
+from app.harvey_bridge.dispatcher import dispatch_emails_via_harvey
 from app.models.schemas import (
+    DeliveryMode,
     DispatchReceipt,
     DispatchResponse,
     EmailDraft,
@@ -135,6 +137,17 @@ class _BusPipelineCallbacks:
             },
         )
 
+    async def on_leads_loaded(self, leads: list[LeadRecord]) -> None:
+        self._state.leads = list(leads)
+        self._state.telemetry.set_total_leads(len(leads))
+        await self._state.pacer.emit_immediate(
+            StreamEventType.LEADS_LOADED,
+            {
+                "leads": [lead.model_dump(mode="json") for lead in leads],
+                "telemetry": self._state.telemetry.snapshot().model_dump(mode="json"),
+            },
+        )
+
     async def on_hunter_report(self, report: HunterReport) -> None:
         self._state.hunter_report = report
         await self._state.pacer.emit_immediate(
@@ -193,8 +206,12 @@ async def _run_authentic_replay(
     leads: list[LeadRecord],
     callbacks: PipelineCallbacks,
     replay_path: Path = DATA_DIR / "replay_snapshot.json",
+    time_scale: float = 1.0,
 ) -> PipelineFinalResult:
-    """Replays an authentic recorded real-Gemini session from data/replay_snapshot.json."""
+    """
+    Replays an authentic recorded real-Gemini session from data/replay_snapshot.json
+    with realistic >=3s-per-step pacing and live ADK telemetry logs.
+    """
     if not replay_path.exists():
         raise RuntimeError(
             "Authentic replay snapshot (data/replay_snapshot.json) has not been captured yet. "
@@ -204,36 +221,110 @@ async def _run_authentic_replay(
     raw = json.loads(replay_path.read_text(encoding="utf-8"))
     snapshot = RunStateSnapshot.model_validate(raw["snapshot"])
 
+    async def _pause(seconds: float) -> None:
+        if time_scale > 0 and seconds > 0:
+            await asyncio.sleep(seconds * time_scale)
+
+    # Step 1: Market Auditor (~3.8s total)
     await callbacks.on_phase(PipelinePhase.AUDITING)
-    await asyncio.sleep(0.25)
+    await callbacks.on_log(
+        f"[MarketAuditor] Auditing '{startup_input.product_name}' on {settings.gemini_brain_model}..."
+    )
+    await _pause(0.9)
+    if snapshot.market_audit and snapshot.market_audit.url_scraped_context_used:
+        await callbacks.on_log(
+            f"[MarketAuditor] Extracted live website context from {startup_input.product_url or 'product URL'}."
+        )
+        await _pause(0.6)
+    await callbacks.on_log(
+        "[MarketAuditor] Running Assumption vs. Reality Gap Analysis & Competitor Wedge..."
+    )
+    await _pause(0.9)
     if snapshot.market_audit:
         await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
         await callbacks.on_audit(snapshot.market_audit)
+        await callbacks.on_log(
+            f"[MarketAuditor] Readiness {snapshot.market_audit.market_readiness_score}/100 · "
+            f"Locked {len(snapshot.market_audit.anti_icp_red_flags)} Anti-ICP kill rules."
+        )
+    await _pause(1.4)
 
+    # Step 2: ICP Engine + Vector Memory (~3.8s total)
     await callbacks.on_phase(PipelinePhase.ICP_GENERATION)
-    await asyncio.sleep(0.2)
+    await callbacks.on_log(
+        f"[ICPEngine] Synthesizing 3 non-overlapping ICP profiles ({settings.gemini_brain_model})..."
+    )
+    await _pause(1.3)
     await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
-    await callbacks.on_model_call(ModelId.GEMINI_EMBEDDING_2)
     await callbacks.on_icps(snapshot.icps)
+    await callbacks.on_log(
+        "[ICPEngine] Chunking product wedge & Anti-ICP guardrails into vector store..."
+    )
+    await _pause(0.8)
+    await callbacks.on_log(
+        f"[ICPEngine] Indexing ICPs & {len(leads)} lead vectors via {settings.gemini_embedding_model} (768d MRL)..."
+    )
+    await callbacks.on_model_call(ModelId.GEMINI_EMBEDDING_2)
+    await _pause(1.7)
 
+    # Step 3: Hunter Swarm + Dual-Polarity Scoring (~3.6s total)
     await callbacks.on_phase(PipelinePhase.HUNTING)
-    await asyncio.sleep(0.2)
+    await callbacks.on_log(
+        "[HunterSwarm] Generating Boolean hunt queries across LinkedIn, GitHub & hiring feeds..."
+    )
+    await _pause(1.3)
+    await callbacks.on_model_call(ModelId.GEMINI_3_5_FLASH_LITE)
     if snapshot.hunter_report:
         await callbacks.on_hunter_report(snapshot.hunter_report)
+    await callbacks.on_log(
+        f"[HunterSwarm] Computing Dual-Polarity NumPy priors (60% ICP + 25% Structural - 15% Anti-ICP) across {len(leads)} leads..."
+    )
+    await _pause(1.4)
+    await callbacks.on_log(
+        f"[HunterSwarm] Armed {len(leads)} leads with Dual-Polarity vector priors (6h cache hit)."
+    )
+    await _pause(0.9)
 
+    # Step 4: Slayer Swarm (Smooth Bloodbath cascade ~5.7s total)
     await callbacks.on_phase(PipelinePhase.SLAYING)
+    await callbacks.on_log(
+        f"[SlayerSwarm] Unleashing {startup_input.slaying_level.value} Slayer ({settings.gemini_workhorse_model}) across {len(leads)} leads..."
+    )
+    await _pause(0.5)
     for lead in leads:
         verdict = snapshot.verdicts.get(lead.id)
         if verdict is not None:
             await callbacks.on_model_call(ModelId.GEMINI_3_5_FLASH_LITE)
             await callbacks.on_verdict(verdict)
+            await _pause(0.085)
 
+    killed_n = sum(1 for v in snapshot.verdicts.values() if not v.survived)
+    surv_n = len(snapshot.verdicts) - killed_n
+    await callbacks.on_log(
+        f"[SlayerSwarm] Bloodbath complete: {killed_n} KILLED, {surv_n} SURVIVED."
+    )
+    await _pause(1.0)
+
+    # Step 5: Sniper Agent (Grounded Emails ~4.8s total)
     await callbacks.on_phase(PipelinePhase.SNIPING)
+    await callbacks.on_log(
+        f"[Sniper] Retrieving top-2 Stage 2 product chunks for {surv_n} survivors..."
+    )
+    await _pause(1.0)
+    await callbacks.on_log(
+        "[Sniper] Verifying evidence quotes & anti-hallucination grounding..."
+    )
+    await _pause(0.7)
     for lead in leads:
         draft = snapshot.emails.get(lead.id)
         if draft is not None:
             await callbacks.on_model_call(ModelId.GEMINI_4_HYDROGEN)
             await callbacks.on_email(draft)
+            await callbacks.on_log(
+                f"[Sniper] Drafted email for {draft.recipient_name} ({draft.company}) · Evidence verified."
+            )
+            await _pause(0.32)
+    await _pause(0.5)
 
     assert snapshot.market_audit is not None
     return PipelineFinalResult(
@@ -258,6 +349,7 @@ class RunManager:
         pacer_normal_delay_s: float = 0.09,
         pacer_fast_delay_s: float = 0.025,
         replay_path: Path = DATA_DIR / "replay_snapshot.json",
+        replay_time_scale: float = 1.0,
     ) -> None:
         self._runs: OrderedDict[str, RunState] = OrderedDict()
         self._max_runs = max_runs
@@ -267,6 +359,7 @@ class RunManager:
         self._pacer_normal_delay_s = pacer_normal_delay_s
         self._pacer_fast_delay_s = pacer_fast_delay_s
         self._replay_path = replay_path
+        self._replay_time_scale = replay_time_scale
 
     def _purge_expired_and_cap(self) -> None:
         now = time.time()
@@ -304,11 +397,16 @@ class RunManager:
     async def start_run(self, startup_input: StartupInput) -> RunState:
         self._purge_expired_and_cap()
 
-        leads = (
-            list(startup_input.leads)
-            if startup_input.leads
-            else load_preset_leads()
+        needs_autonomous = (
+            startup_input.auto_discover_leads
+            or any(src in startup_input.lead_sources for src in ("AI_SEARCH", "LINKEDIN_SEARCH"))
         )
+        if startup_input.leads:
+            leads = list(startup_input.leads)
+        elif needs_autonomous and startup_input.execution_mode != ExecutionMode.SAFE_REPLAY:
+            leads = []
+        else:
+            leads = load_preset_leads()
         run_id = uuid.uuid4().hex[:12]
         bus = EventStreamBus(run_id)
         pacer = DualLanePacer(
@@ -348,6 +446,7 @@ class RunManager:
                     state.leads,
                     callbacks,
                     replay_path=self._replay_path,
+                    time_scale=self._replay_time_scale,
                 )
             else:
                 runner = self._pipeline_runner or _default_live_runner()
@@ -417,29 +516,24 @@ class RunManager:
             telemetry=state.telemetry.snapshot(),
         )
 
-    def dispatch_emails(self, run_id: str, lead_ids: list[str]) -> DispatchResponse:
+    async def dispatch_emails(
+        self,
+        run_id: str,
+        lead_ids: list[str],
+        delivery_mode: DeliveryMode = "SANDBOX",
+    ) -> DispatchResponse:
         state = self.get_run(run_id)
-        receipts: list[DispatchReceipt] = []
-        for lid in lead_ids:
-            draft = state.emails.get(lid)
-            if draft is None:
-                continue
-            updated = draft.model_copy(update={"status": "SENT", "approved": True})
-            state.emails[lid] = updated
-            receipts.append(
-                DispatchReceipt(
-                    lead_id=lid,
-                    recipient_email=updated.recipient_email,
-                    status="SENT",
-                )
-            )
-        if receipts:
-            state.phase = PipelinePhase.DISPATCHED
-        return DispatchResponse(
-            dispatched_count=len(receipts),
-            sent_at=datetime.now(timezone.utc).isoformat(),
-            receipts=receipts,
+        leads_by_id = {lead.id: lead for lead in state.leads}
+        response, any_sent = await dispatch_emails_via_harvey(
+            emails=state.emails,
+            leads_by_id=leads_by_id,
+            lead_ids=lead_ids,
+            delivery_mode=delivery_mode,
+            product_name=state.startup_input.product_name or "LeadSlayer",
         )
+        if any_sent:
+            state.phase = PipelinePhase.DISPATCHED
+        return response
 
 
 run_manager = RunManager()

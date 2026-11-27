@@ -42,6 +42,9 @@ export type StreamEventType =
   | "pipeline_completed"
   | "pipeline_error";
 
+export type LeadSourceType = "AI_SEARCH" | "LINKEDIN_SEARCH" | "CSV_PRESET";
+export type DeliveryMode = "SANDBOX" | "HARVEY_SMTP" | "HARVEY_GMAIL";
+
 export interface LeadRecord {
   id: string;
   full_name: string;
@@ -55,6 +58,10 @@ export interface LeadRecord {
   recent_signal: string;
   bio_snippet: string;
   email: string;
+  linkedin_url?: string;
+  email_status?: string;
+  mx_provider?: string;
+  source_channel?: string;
 }
 
 export interface StartupInput {
@@ -65,6 +72,9 @@ export interface StartupInput {
   slaying_level: SlayingLevel;
   execution_mode: ExecutionMode;
   leads: LeadRecord[] | null;
+  lead_sources?: LeadSourceType[];
+  auto_discover_leads?: boolean;
+  target_lead_count?: number;
 }
 
 export interface AssumptionGap {
@@ -130,6 +140,8 @@ export interface HunterReport {
   enriched_sparse_leads: number;
   url_fetches_succeeded: number;
   total_leads_ready: number;
+  autonomous_discovered_leads?: number;
+  discovery_sources?: string[];
 }
 
 export interface SlayerVerdict {
@@ -219,7 +231,7 @@ export type StreamEvent =
       run_id: string;
       timestamp_ms: number;
       event_type: "leads_loaded";
-      payload: { leads: LeadRecord[] };
+      payload: { leads: LeadRecord[]; telemetry?: TelemetryMetrics };
     }
   | {
       event_id: number;
@@ -301,16 +313,32 @@ export interface ResurrectResponse {
 
 export interface DispatchRequest {
   lead_ids: string[];
+  delivery_mode?: DeliveryMode;
 }
 
 export interface DispatchReceipt {
   lead_id: string;
   recipient_email: string;
-  status: "SENT";
+  status: "SENT" | "BLOCKED" | "FAILED";
+  provider?: string;
+  message_id?: string;
+  gate_reasons?: string[];
+  error?: string;
 }
 
 export interface DispatchResponse {
   dispatched_count: number;
+  blocked_count?: number;
+  delivery_mode?: string;
   sent_at: string;
   receipts: DispatchReceipt[];
+}
+
+export interface HarveyStatusResponse {
+  harvey_connected: boolean;
+  smtp_configured: boolean;
+  gmail_configured: boolean;
+  linkedin_playwright_configured: boolean;
+  smtp_sender: string;
+  do_not_contact_count: number;
 }

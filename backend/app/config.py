@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 CONTRACTS_DIR = REPO_ROOT / "contracts"
+HARVEY_ROOT = REPO_ROOT / "harvey"
 
 
 class Settings(BaseSettings):
@@ -27,6 +28,22 @@ class Settings(BaseSettings):
     embedding_cache_max_entries: int = 1000
     max_active_runs: int = 20
     slayer_concurrency: int = 5
+
+    # Optional Harvey Tier B/C integrations (zero cost; leave blank for safe sandbox)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    imap_host: str = ""
+    imap_port: int = 993
+    smtp_from_name: str = "LeadSlayer"
+    smtp_from_email: str = ""
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
+    linkedin_email: str = ""
+    linkedin_password: str = ""
+    do_not_contact_domains: str = ""
+    sender_postal_address: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

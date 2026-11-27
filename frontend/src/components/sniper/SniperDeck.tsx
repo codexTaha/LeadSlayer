@@ -16,6 +16,11 @@ export function SniperDeck() {
   const orderedDrafts = leadOrder
     .map((id) => emailsById[id])
     .filter((d): d is NonNullable<typeof d> => Boolean(d));
+  const targetSurvivors = telemetry?.survived_count ?? orderedDrafts.length;
+  const sniperPct =
+    targetSurvivors > 0
+      ? Math.min(100, (orderedDrafts.length / targetSurvivors) * 100)
+      : 0;
 
   return (
     <div className="space-y-5">
@@ -42,30 +47,59 @@ export function SniperDeck() {
       </div>
 
       {phase === "SNIPING" && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-xs font-mono text-emerald-300">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Sniper Agent retrieving Stage 2 product chunks &amp; drafting evidence-backed outreach...
+        <div className="rounded-xl border border-emerald-500/35 bg-emerald-950/20 px-4 py-3 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-emerald-300">
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Sniper Agent retrieving Stage 2 product chunks &amp; drafting evidence-backed outreach...
+            </span>
+            <span>
+              {orderedDrafts.length}/{targetSurvivors || "?"} drafted
+            </span>
+          </div>
+          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-emerald-950">
+            {orderedDrafts.length === 0 ? (
+              <motion.div
+                className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-emerald-400 to-transparent"
+                animate={{ x: ["-100%", "340%"] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            ) : (
+              <motion.div
+                className="h-full rounded-full bg-emerald-400"
+                initial={{ width: "0%" }}
+                animate={{ width: `${sniperPct}%` }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {orderedDrafts.length === 0 && phase !== "SNIPING" ? (
+      {orderedDrafts.length === 0 && phase === "SNIPING" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[0, 1].map((idx) => (
+            <div
+              key={idx}
+              className="rounded-2xl border border-emerald-500/20 bg-zinc-950/80 p-5 space-y-3 animate-pulse"
+            >
+              <div className="h-4 w-40 rounded bg-zinc-800" />
+              <div className="h-3 w-64 rounded bg-zinc-900" />
+              <div className="h-8 w-full rounded bg-zinc-900" />
+              <div className="h-20 w-full rounded bg-zinc-900/70" />
+            </div>
+          ))}
+        </div>
+      ) : orderedDrafts.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-8 text-center text-sm text-zinc-400">
           No survivor emails drafted yet. Run the Bloodbath or resurrect a killed lead from the 50-tile matrix.
         </div>
       ) : (
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: 0.07 } },
-          }}
-          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
-        >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {orderedDrafts.map((draft) => (
             <SniperEmailCard key={draft.lead_id} draft={draft} />
           ))}
-        </motion.div>
+        </div>
       )}
 
       <DispatchExportBar />

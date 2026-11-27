@@ -1,5 +1,7 @@
 import type {
+  DeliveryMode,
   DispatchResponse,
+  HarveyStatusResponse,
   HealthResponse,
   ParseCsvResponse,
   PipelineStartResponse,
@@ -73,14 +75,22 @@ export async function resurrectLead(
   return handleJson<ResurrectResponse>(res);
 }
 
+export async function fetchHarveyStatus(): Promise<HarveyStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/pipeline/harvey-status`, {
+    cache: "no-store",
+  });
+  return handleJson<HarveyStatusResponse>(res);
+}
+
 export async function dispatchEmails(
   runId: string,
-  leadIds: string[]
+  leadIds: string[],
+  deliveryMode: DeliveryMode = "SANDBOX"
 ): Promise<DispatchResponse> {
   const res = await fetch(`${API_BASE}/api/pipeline/${runId}/dispatch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lead_ids: leadIds }),
+    body: JSON.stringify({ lead_ids: leadIds, delivery_mode: deliveryMode }),
   });
   return handleJson<DispatchResponse>(res);
 }

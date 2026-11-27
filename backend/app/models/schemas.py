@@ -68,6 +68,8 @@ FundingStage = Literal[
     "Public",
 ]
 
+LeadSourceType = Literal["AI_SEARCH", "LINKEDIN_SEARCH", "CSV_PRESET"]
+
 
 class LeadRecord(BaseModel):
     id: str = Field(min_length=1)
@@ -82,6 +84,10 @@ class LeadRecord(BaseModel):
     recent_signal: str = Field(default="")
     bio_snippet: str = Field(default="")
     email: str = Field(min_length=3)
+    linkedin_url: str = Field(default="")
+    email_status: str = Field(default="unknown")
+    mx_provider: str = Field(default="")
+    source_channel: str = Field(default="CSV")
 
 
 class StartupInput(BaseModel):
@@ -92,6 +98,9 @@ class StartupInput(BaseModel):
     slaying_level: SlayingLevel = SlayingLevel.RUTHLESS
     execution_mode: ExecutionMode = ExecutionMode.LIVE
     leads: list[LeadRecord] | None = None
+    lead_sources: list[LeadSourceType] = Field(default_factory=lambda: ["CSV_PRESET"])
+    auto_discover_leads: bool = False
+    target_lead_count: int = Field(default=15, ge=5, le=30)
 
 
 class AssumptionGap(BaseModel):
@@ -157,6 +166,8 @@ class HunterReport(BaseModel):
     enriched_sparse_leads: int = 0
     url_fetches_succeeded: int = 0
     total_leads_ready: int = 0
+    autonomous_discovered_leads: int = 0
+    discovery_sources: list[str] = Field(default_factory=list)
 
 
 class SlayerVerdict(BaseModel):
@@ -261,17 +272,36 @@ class ResurrectResponse(BaseModel):
     telemetry: TelemetryMetrics
 
 
+DeliveryMode = Literal["SANDBOX", "HARVEY_SMTP", "HARVEY_GMAIL"]
+
+
 class DispatchRequest(BaseModel):
     lead_ids: list[str]
+    delivery_mode: DeliveryMode = "SANDBOX"
 
 
 class DispatchReceipt(BaseModel):
     lead_id: str
     recipient_email: str
-    status: Literal["SENT"] = "SENT"
+    status: Literal["SENT", "BLOCKED", "FAILED"] = "SENT"
+    provider: str = "SANDBOX"
+    message_id: str = ""
+    gate_reasons: list[str] = Field(default_factory=list)
+    error: str = ""
 
 
 class DispatchResponse(BaseModel):
     dispatched_count: int
+    blocked_count: int = 0
+    delivery_mode: str = "SANDBOX"
     sent_at: str
     receipts: list[DispatchReceipt]
+
+
+class HarveyStatusResponse(BaseModel):
+    harvey_connected: bool
+    smtp_configured: bool
+    gmail_configured: bool
+    linkedin_playwright_configured: bool
+    smtp_sender: str = ""
+    do_not_contact_count: int = 0

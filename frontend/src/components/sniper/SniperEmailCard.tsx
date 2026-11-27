@@ -19,10 +19,9 @@ export function SniperEmailCard({ draft }: SniperEmailCardProps) {
 
   return (
     <motion.article
-      variants={{
-        hidden: { opacity: 0, y: 14 },
-        visible: { opacity: 1, y: 0 },
-      }}
+      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
       className={`rounded-2xl border p-5 space-y-4 transition-colors ${
         isSent
           ? "border-emerald-400/60 bg-emerald-950/20"
@@ -56,6 +55,17 @@ export function SniperEmailCard({ draft }: SniperEmailCardProps) {
             <span className="font-mono text-zinc-500">
               {draft.recipient_email}
             </span>
+            {lead?.source_channel && lead.source_channel !== "CSV" && (
+              <span className="ml-2 rounded border border-indigo-500/35 bg-indigo-500/10 px-1.5 py-0.2 text-[10px] font-mono text-indigo-300">
+                {lead.source_channel}
+              </span>
+            )}
+            {lead?.email_status && lead.email_status !== "unknown" && (
+              <span className="ml-1.5 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.2 text-[10px] font-mono text-zinc-300">
+                {lead.email_status}
+                {lead.mx_provider ? ` · MX:${lead.mx_provider}` : ""}
+              </span>
+            )}
           </p>
         </div>
 

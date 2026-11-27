@@ -1,6 +1,7 @@
 "use client";
 
-import { Radar, ShieldCheck, Skull } from "lucide-react";
+import { motion } from "framer-motion";
+import { Loader2, Radar, ShieldCheck, Skull } from "lucide-react";
 import { REJECTION_CATEGORY_LABELS } from "@/lib/constants";
 import {
   useLeadSlayerStore,
@@ -19,6 +20,7 @@ const CATEGORIES: RejectionCategory[] = [
 ];
 
 export function SlayerAutopsyBar() {
+  const phase = useLeadSlayerStore((s) => s.phase);
   const telemetry = useLeadSlayerStore((s) => s.telemetry);
   const hunterReport = useLeadSlayerStore((s) => s.hunterReport);
   const leadCount = useLeadSlayerStore((s) => s.leadOrder.length);
@@ -32,6 +34,7 @@ export function SlayerAutopsyBar() {
   const killRate = telemetry?.kill_rate_pct ?? 0;
   const savedHours = telemetry?.estimated_saved_spam_hours ?? 0;
   const breakdown = telemetry?.rejection_breakdown ?? {};
+  const slayerPct = total > 0 ? Math.min(100, (processed / total) * 100) : 0;
 
   const renderFilterPill = (
     key: CategoryFilter,
@@ -70,6 +73,49 @@ export function SlayerAutopsyBar() {
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-950/90 p-4 space-y-3.5">
+      {phase === "HUNTING" && (
+        <div className="rounded-lg border border-indigo-500/35 bg-indigo-950/20 px-3 py-2.5 space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-indigo-200">
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+              Hunter Swarm scanning {total} leads with Dual-Polarity vector similarity...
+            </span>
+            <span className="text-[11px] text-indigo-300">
+              60% ICP · 25% Struct · -15% Anti-ICP
+            </span>
+          </div>
+          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-indigo-950">
+            <motion.div
+              className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent"
+              animate={{ x: ["-100%", "340%"] }}
+              transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </div>
+        </div>
+      )}
+
+      {phase === "SLAYING" && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-950/15 px-3 py-2 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-mono text-rose-200">
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />
+              Slayer Swarm Adversarial Triage Active
+            </span>
+            <span>
+              {processed}/{total} evaluated ({slayerPct.toFixed(0)}%)
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400"
+              initial={{ width: "0%" }}
+              animate={{ width: `${slayerPct}%` }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
           <div className="text-[10px] font-mono uppercase text-zinc-500">
@@ -126,6 +172,11 @@ export function SlayerAutopsyBar() {
             <Radar className="h-3.5 w-3.5" />
             Hunter Signals:
           </span>
+          {(hunterReport.autonomous_discovered_leads ?? 0) > 0 && (
+            <span className="rounded border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 font-mono text-emerald-200">
+              Auto-Discovered: {hunterReport.autonomous_discovered_leads} real companies ({hunterReport.url_fetches_succeeded} live sites)
+            </span>
+          )}
           {hunterReport.hunt_queries.slice(0, 3).map((q, idx) => (
             <span
               key={idx}

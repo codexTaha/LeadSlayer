@@ -594,3 +594,55 @@ async def test_harvey_pre_send_gate_and_smtp_dispatch(monkeypatch) -> None:
     assert r1.message_id == "<test-msg@leadslayer>"
     assert r2.status == "BLOCKED"
     assert any("do-not-contact" in reason for reason in r2.gate_reasons)
+
+
+async def test_key_rotator_search_isolation_and_encapsulated_web_index(monkeypatch) -> None:
+    from app.agents.key_rotator import KeyRotator
+    from app.harvey_bridge import web_index
+    from app.config import settings
+
+    rot = KeyRotator(["k1", "k2"])
+    rot.mark_search_throttled("k1")
+    # Search cooldown must NOT quarantine k1 for standard LLM/embedding inference
+    assert rot.next_key() == "k1"
+    assert rot.next_search_key() == "k2"
+    rot.mark_search_throttled("k2")
+    assert rot.next_search_key() is None
+
+    monkeypatch.setattr(settings, "serper_api_key", "test-serp-key")
+    assert web_index.has_live_web_index() is True
+
+    class _FakeResp:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {
+                "organic": [
+                    {
+                        "title": "Acme Cloud Infra - Engineering",
+                        "link": "https://acmecloud.io/platform",
+                        "snippet": "Scaling Kubernetes workloads across AWS EKS clusters.",
+                    }
+                ]
+            }
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, *, headers=None, json=None):
+            assert json["num"] <= 10
+            return _FakeResp()
+
+    monkeypatch.setattr(web_index.httpx, "AsyncClient", _FakeAsyncClient)
+    notes, urls = await web_index.query_live_web_index(["kubernetes eks saas"], num_per_query=25)
+    assert urls == ["https://acmecloud.io/platform"]
+    assert "Acme Cloud Infra" in notes
+    assert "serper" not in notes.lower()

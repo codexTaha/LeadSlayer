@@ -39,24 +39,35 @@ async def execute_icp_engine(
         "Generate exactly 3 distinct Ideal Customer Profiles (icp_1, icp_2, icp_3)."
     )
 
-    genai_client = client or genai.Client(
-        api_key=key_rotator.next_key(),
-        http_options=genai.types.HttpOptions(
-            retry_options=genai.types.HttpRetryOptions(attempts=1)
-        ),
-    )
-
     async def _call_icp(_: int) -> list[ICPProfile]:
-        resp = await genai_client.aio.models.generate_content(
-            model=settings.gemini_brain_model,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=ICP_ENGINE_SYSTEM_PROMPT,
-                temperature=0.2,
-                response_mime_type="application/json",
-                response_schema=ICPBatchOutput,
-            ),
-        )
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            genai_client = genai.Client(
+                api_key=active_key,
+                http_options=genai.types.HttpOptions(
+                    retry_options=genai.types.HttpRetryOptions(attempts=1)
+                ),
+            )
+        else:
+            genai_client = client
+        try:
+            resp = await genai_client.aio.models.generate_content(
+                model=settings.gemini_brain_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=ICP_ENGINE_SYSTEM_PROMPT,
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=ICPBatchOutput,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
         if not resp.text:
             raise RuntimeError("ICPEngine returned empty output.")
         parsed = ICPBatchOutput.model_validate_json(resp.text)
@@ -69,7 +80,7 @@ async def execute_icp_engine(
         return normalized
 
     executor = GentleAdaptiveExecutor(
-        concurrency=1, launch_stagger_s=0.0, max_retries=2, backoff_schedule=(2.0, 5.0)
+        concurrency=1, launch_stagger_s=0.0, max_retries=max(2, key_rotator.pool_size), backoff_schedule=(1.5, 3.0)
     )
     icps: list[ICPProfile] = []
     async for _, res in executor.run_stream([0], _call_icp):

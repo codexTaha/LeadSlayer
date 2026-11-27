@@ -10,6 +10,7 @@ from app.agents.auditor_agent import MarketAuditorADKAgent
 from app.agents.hunter_agent import HunterSwarmADKAgent
 from app.agents.icp_agent import ICPEngineADKAgent
 from app.agents.interface import PipelineCallbacks, PipelineFinalResult
+from app.agents.key_rotator import key_rotator
 from app.agents.slayer_agent import SlayerSwarmADKAgent
 from app.agents.sniper_agent import SniperADKAgent
 from app.config import settings
@@ -35,7 +36,7 @@ async def run_live_pipeline(
     MarketAuditor -> ICPEngine -> HunterSwarm -> SlayerSwarm -> Sniper.
     """
     if settings.gemini_api_key:
-        os.environ["GOOGLE_API_KEY"] = settings.gemini_api_key
+        os.environ["GOOGLE_API_KEY"] = key_rotator.next_key()
 
     pipeline_agent = SequentialAgent(
         name="leadslayer_gtm_pipeline",

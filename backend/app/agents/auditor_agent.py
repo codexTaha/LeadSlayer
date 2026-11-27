@@ -11,28 +11,43 @@ from pydantic import ConfigDict
 
 from app.agents.interface import PipelineCallbacks
 from app.agents.prompts import AUDITOR_SYSTEM_PROMPT
-from app.agents.rate_limiter import GentleAdaptiveExecutor
+from app.agents.rate_limiter import GentleAdaptiveExecutor, key_rotator
 from app.config import settings
+from app.harvey_bridge.web_index import has_live_web_index, query_live_web_index
 from app.models.schemas import MarketAuditResult, ModelId, PipelinePhase, StartupInput
 from app.services.url_fetcher import fetch_site_context
 
 
 async def _run_optional_search_grounding(startup: StartupInput) -> str | None:
     """
-    Lightweight optional Gemini Search Grounding pass for real competitor & market context.
+    Lightweight optional live market context pass for real competitor & switching context.
+    Prefers our encapsulated live web index when active, then unblocked search keys.
     Never fails the pipeline or spams logs if search grounding is unavailable or throttled.
     """
-    if not settings.gemini_api_key:
+    if has_live_web_index():
+        try:
+            notes, _ = await query_live_web_index(
+                [f"{startup.product_name} competitors alternatives pricing switching"],
+                num_per_query=6,
+                pages_per_query=1,
+            )
+            if notes:
+                return notes[:1400]
+        except Exception:
+            pass
+
+    search_key = key_rotator.next_search_key()
+    if not search_key:
         return None
     try:
         client = genai.Client(
-            api_key=key_rotator.next_key(),
+            api_key=search_key,
             http_options=genai.types.HttpOptions(
                 retry_options=genai.types.HttpRetryOptions(attempts=1)
             ),
         )
         res = await client.aio.models.generate_content(
-            model=settings.gemini_workhorse_model,
+            model="gemini-2.5-flash",
             contents=(
                 f"Briefly list 3 real competing products and common buyer switching triggers "
                 f"for this category in 4 concise bullets.\nProduct: {startup.product_name}\n"
@@ -44,8 +59,13 @@ async def _run_optional_search_grounding(startup: StartupInput) -> str | None:
             ),
         )
         text = (res.text or "").strip()
-        return text if text else None
-    except Exception:
+        if text:
+            key_rotator.mark_search_ok(search_key)
+            return text
+        return None
+    except Exception as exc:
+        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) or "404" in str(exc):
+            key_rotator.mark_search_throttled(search_key)
         return None
 
 
@@ -83,24 +103,36 @@ async def execute_market_audit(
         prompt_parts.append(f"Live Search Market Intel:\n{search_notes}")
 
     user_prompt = "\n\n".join(prompt_parts)
-    genai_client = client or genai.Client(
-        api_key=key_rotator.next_key(),
-        http_options=genai.types.HttpOptions(
-            retry_options=genai.types.HttpRetryOptions(attempts=1)
-        ),
-    )
 
     async def _call_auditor(_: int) -> MarketAuditResult:
-        resp = await genai_client.aio.models.generate_content(
-            model=settings.gemini_brain_model,
-            contents=user_prompt,
-            config=genai.types.GenerateContentConfig(
-                system_instruction=AUDITOR_SYSTEM_PROMPT,
-                temperature=0.2,
-                response_mime_type="application/json",
-                response_schema=MarketAuditResult,
-            ),
-        )
+        active_key = ""
+        if client is None:
+            active_key = key_rotator.next_key()
+            genai_client = genai.Client(
+                api_key=active_key,
+                http_options=genai.types.HttpOptions(
+                    retry_options=genai.types.HttpRetryOptions(attempts=1)
+                ),
+            )
+        else:
+            genai_client = client
+        try:
+            resp = await genai_client.aio.models.generate_content(
+                model=settings.gemini_brain_model,
+                contents=user_prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=AUDITOR_SYSTEM_PROMPT,
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=MarketAuditResult,
+                ),
+            )
+            if client is None and active_key:
+                key_rotator.mark_ok(active_key)
+        except Exception as exc:
+            if client is None and active_key and ("429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)):
+                key_rotator.mark_throttled(active_key)
+            raise
         if not resp.text:
             raise RuntimeError("MarketAuditor returned empty output.")
         audit = MarketAuditResult.model_validate_json(resp.text)
@@ -112,7 +144,7 @@ async def execute_market_audit(
         )
 
     executor = GentleAdaptiveExecutor(
-        concurrency=1, launch_stagger_s=0.0, max_retries=2, backoff_schedule=(2.0, 5.0)
+        concurrency=1, launch_stagger_s=0.0, max_retries=max(2, key_rotator.pool_size), backoff_schedule=(1.5, 3.0)
     )
     audit_result: MarketAuditResult | None = None
     async for _, res in executor.run_stream([0], _call_auditor):

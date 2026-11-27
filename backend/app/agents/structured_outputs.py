@@ -14,6 +14,10 @@ class HuntQueriesOutput(BaseModel):
     hunt_queries: list[HuntQuery] = Field(min_length=1, max_length=5)
 
 
+class WebSearchQueriesOutput(BaseModel):
+    queries: list[str] = Field(min_length=1, max_length=6)
+
+
 class EnrichedLeadPatch(BaseModel):
     lead_id: str
     inferred_tech_stack: list[str] = Field(default_factory=list)

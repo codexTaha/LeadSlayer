@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, Crosshair, Loader2 } from "lucide-react";
 import { DispatchExportBar } from "@/components/sniper/DispatchExportBar";
+import { MCPDecisionsPanel } from "@/components/sniper/MCPDecisionsPanel";
 import { SniperEmailCard } from "@/components/sniper/SniperEmailCard";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 
@@ -101,6 +102,8 @@ export function SniperDeck() {
           ))}
         </div>
       )}
+
+      <MCPDecisionsPanel />
 
       <DispatchExportBar />
     </div>

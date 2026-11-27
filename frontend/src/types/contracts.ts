@@ -38,12 +38,13 @@ export type StreamEventType =
   | "leads_loaded"
   | "lead_verdict"
   | "email_drafted"
+  | "mcp_tool_call"
   | "telemetry_update"
   | "pipeline_completed"
   | "pipeline_error";
 
 export type LeadSourceType = "AI_SEARCH" | "LINKEDIN_SEARCH" | "CSV_PRESET";
-export type DeliveryMode = "SANDBOX" | "HARVEY_SMTP" | "HARVEY_GMAIL";
+export type DeliveryMode = "SANDBOX" | "SMTP" | "GMAIL_OAUTH";
 
 export interface LeadRecord {
   id: string;
@@ -178,6 +179,26 @@ export interface EmailDraft {
   status: "DRAFTED" | "SENT";
 }
 
+export interface MCPToolCallRecord {
+  id: string;
+  timestamp_ms: number;
+  agent_name: string;
+  decision_reason: string;
+  server_name: string;
+  tool_name: string;
+  arguments_summary: string;
+  result_summary: string;
+  status: "CALLED" | "SUCCEEDED" | "BLOCKED" | "FAILED";
+}
+
+export interface MCPStatusResponse {
+  connected: boolean;
+  server_name: string;
+  transport: string;
+  tools: string[];
+  error: string;
+}
+
 export interface TelemetryMetrics {
   total_leads: number;
   processed_leads: number;
@@ -252,6 +273,13 @@ export type StreamEvent =
       event_id: number;
       run_id: string;
       timestamp_ms: number;
+      event_type: "mcp_tool_call";
+      payload: { mcp_tool_call: MCPToolCallRecord; telemetry?: TelemetryMetrics };
+    }
+  | {
+      event_id: number;
+      run_id: string;
+      timestamp_ms: number;
       event_type: "telemetry_update";
       payload: { telemetry: TelemetryMetrics };
     }
@@ -280,6 +308,7 @@ export interface RunStateSnapshot {
   leads: LeadRecord[];
   verdicts: Record<string, SlayerVerdict>;
   emails: Record<string, EmailDraft>;
+  mcp_tool_calls?: MCPToolCallRecord[];
   telemetry: TelemetryMetrics;
   error_message: string | null;
 }
@@ -335,11 +364,24 @@ export interface DispatchResponse {
   receipts: DispatchReceipt[];
 }
 
-export interface HarveyStatusResponse {
-  harvey_connected: boolean;
+export interface MailStatusResponse {
+  mail_engine_ready: boolean;
   smtp_configured: boolean;
   gmail_configured: boolean;
-  linkedin_playwright_configured: boolean;
+  gmail_oauth_available: boolean;
+  linkedin_browser_configured: boolean;
+  active_provider: "SANDBOX" | "SMTP" | "GMAIL_OAUTH";
   smtp_sender: string;
+  sender_name: string;
   do_not_contact_count: number;
+}
+
+export interface SMTPConnectRequest {
+  email: string;
+  password: string;
+  smtp_host: string;
+  smtp_port: number;
+  sender_name: string;
+  postal_address?: string;
+  verify_connection?: boolean;
 }

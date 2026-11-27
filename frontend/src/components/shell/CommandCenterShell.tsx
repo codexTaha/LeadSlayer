@@ -1,11 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Crosshair, RotateCcw } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Crosshair, PlugZap, RotateCcw } from "lucide-react";
 import { PhaseStepper } from "@/components/shell/PhaseStepper";
 import { ErrorAlertBanner } from "@/components/shell/ErrorAlertBanner";
+import { fetchMcpStatus } from "@/lib/api";
 import { SLAYING_LEVELS } from "@/lib/constants";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
+import type { MCPStatusResponse } from "@/types/contracts";
 
 interface CommandCenterShellProps {
   children: ReactNode;
@@ -18,11 +20,21 @@ export function CommandCenterShell({
 }: CommandCenterShellProps) {
   const phase = useLeadSlayerStore((s) => s.phase);
   const executionMode = useLeadSlayerStore((s) => s.executionMode);
+  const setExecutionMode = useLeadSlayerStore((s) => s.setExecutionMode);
   const slayingLevel = useLeadSlayerStore((s) => s.startupInput.slaying_level);
   const telemetry = useLeadSlayerStore((s) => s.telemetry);
   const resetDemo = useLeadSlayerStore((s) => s.resetDemo);
 
+  const [mcpStatus, setMcpStatus] = useState<MCPStatusResponse | null>(null);
+
+  useEffect(() => {
+    void fetchMcpStatus()
+      .then((res) => setMcpStatus(res))
+      .catch(() => {});
+  }, []);
+
   const levelMeta = SLAYING_LEVELS[slayingLevel];
+  const canToggleMode = phase === "IDLE" || phase === "READY" || phase === "ERROR";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#07090D] text-zinc-100">
@@ -53,7 +65,7 @@ export function CommandCenterShell({
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               {telemetry && (
                 <div className="hidden md:flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-1.5 text-xs font-mono">
                   <span className="text-rose-400">
@@ -72,11 +84,32 @@ export function CommandCenterShell({
 
               <div
                 title={
-                  executionMode === "LIVE"
-                    ? "Running Live Google Gemini API"
-                    : "Replaying Authentic Cached Gemini Session"
+                  mcpStatus?.connected
+                    ? `MCP Server Connected: ${mcpStatus.tools.join(", ")}`
+                    : "LeadSlayer Operational MCP Server"
                 }
-                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-mono text-zinc-300"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-indigo-500/35 bg-indigo-950/30 px-2.5 py-1 text-[11px] font-mono text-indigo-200"
+              >
+                <PlugZap className="h-3 w-3 text-indigo-400" />
+                MCP: {mcpStatus?.connected ? `${mcpStatus.tools.length} TOOLS` : "STDIO"}
+              </div>
+
+              <button
+                type="button"
+                disabled={!canToggleMode}
+                onClick={() =>
+                  setExecutionMode(executionMode === "LIVE" ? "SAFE_REPLAY" : "LIVE")
+                }
+                title={
+                  canToggleMode
+                    ? "Click to toggle between Live Google Gemini API and Recorded Demo Replay"
+                    : "Reset run to switch execution mode"
+                }
+                className={`inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-mono text-zinc-300 transition ${
+                  canToggleMode
+                    ? "hover:border-zinc-600 hover:bg-zinc-800 cursor-pointer"
+                    : "opacity-75 cursor-not-allowed"
+                }`}
               >
                 <span
                   className={`h-2 w-2 rounded-full ${
@@ -85,8 +118,8 @@ export function CommandCenterShell({
                       : "bg-amber-400 shadow-[0_0_8px_#fbbf24]"
                   }`}
                 />
-                {executionMode === "LIVE" ? "LIVE GEMINI" : "CACHED REPLAY"}
-              </div>
+                {executionMode === "LIVE" ? "LIVE GEMINI" : "RECORDED REPLAY"}
+              </button>
 
               {phase !== "IDLE" && (
                 <button

@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from mcp import ClientSession
+from mcp.client.stdio import stdio_client
+
 from app.agents.interface import PipelineCallbacks, PipelineFinalResult
 from app.config import DATA_DIR, settings
 from app.harvey_bridge.dispatcher import dispatch_emails_via_harvey
@@ -24,6 +27,7 @@ from app.models.schemas import (
     ICPProfile,
     LeadRecord,
     MarketAuditResult,
+    MCPToolCallRecord,
     ModelId,
     PipelinePhase,
     ResurrectResponse,
@@ -33,6 +37,7 @@ from app.models.schemas import (
     StreamEventType,
 )
 from app.services.lead_loader import load_preset_leads
+from app.services.mcp_client import build_mcp_server_params
 from app.streaming.event_bus import EventStreamBus
 from app.streaming.pacer import DualLanePacer
 from app.streaming.telemetry import TelemetryAggregator
@@ -71,6 +76,7 @@ class RunState:
     hunter_report: HunterReport | None = None
     verdicts: dict[str, SlayerVerdict] = field(default_factory=dict)
     emails: dict[str, EmailDraft] = field(default_factory=dict)
+    mcp_tool_calls: list[MCPToolCallRecord] = field(default_factory=list)
     task: asyncio.Task[None] | None = None
     error_message: str | None = None
 
@@ -85,6 +91,7 @@ class RunState:
             leads=list(self.leads),
             verdicts=dict(self.verdicts),
             emails=dict(self.emails),
+            mcp_tool_calls=list(self.mcp_tool_calls),
             telemetry=self.telemetry.snapshot(),
             error_message=self.error_message,
         )
@@ -171,6 +178,16 @@ class _BusPipelineCallbacks:
             StreamEventType.EMAIL_DRAFTED,
             {
                 "email_draft": draft.model_dump(mode="json"),
+                "telemetry": self._state.telemetry.snapshot().model_dump(mode="json"),
+            },
+        )
+
+    async def on_mcp_tool_call(self, record: MCPToolCallRecord) -> None:
+        self._state.mcp_tool_calls.append(record)
+        await self._state.pacer.emit_immediate(
+            StreamEventType.MCP_TOOL_CALL,
+            {
+                "mcp_tool_call": record.model_dump(mode="json"),
                 "telemetry": self._state.telemetry.snapshot().model_dump(mode="json"),
             },
         )
@@ -324,7 +341,102 @@ async def _run_authentic_replay(
                 f"[Sniper] Drafted email for {draft.recipient_name} ({draft.company}) · Evidence verified."
             )
             await _pause(0.32)
-    await _pause(0.5)
+
+    # Step 6: Execute real $0 local stdio MCP operations for top survivors
+    mcp_calls: list[MCPToolCallRecord] = []
+    survivor_leads = [l for l in leads if (v := snapshot.verdicts.get(l.id)) and v.survived]
+    try:
+        params = build_mcp_server_params()
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                await callbacks.on_log(
+                    "[OutreachMCPAgent] Connected to leadslayer-ops-mcp over stdio — executing autonomous operational tools..."
+                )
+
+                for lead in survivor_leads[:3]:
+                    v = snapshot.verdicts[lead.id]
+                    crm_res = await session.call_tool(
+                        "check_and_update_dnc_crm",
+                        {"domain": lead.domain, "company": lead.company, "action": "check"},
+                    )
+                    crm_txt = getattr(crm_res.content[0], "text", "{}") if crm_res.content else "{}"
+                    rec1 = MCPToolCallRecord(
+                        id=uuid.uuid4().hex[:8],
+                        timestamp_ms=int(time.time() * 1000),
+                        agent_name="OutreachMCPAgent",
+                        decision_reason=f"Verify CRM & Do-Not-Contact status for {lead.company}",
+                        server_name="leadslayer-ops-mcp",
+                        tool_name="check_and_update_dnc_crm",
+                        arguments_summary=f"domain={lead.domain!r}, action='check'",
+                        result_summary=crm_txt[:220],
+                        status="BLOCKED" if '"allowed": false' in crm_txt.lower() else "SUCCEEDED",
+                    )
+                    mcp_calls.append(rec1)
+                    await callbacks.on_mcp_tool_call(rec1)
+                    await callbacks.on_log(f"[MCP DECISION] {rec1.decision_reason} -> `check_and_update_dnc_crm`")
+
+                    if v.qualification_score >= 80:
+                        rem_res = await session.call_tool(
+                            "schedule_followup_reminder",
+                            {
+                                "run_id": run_id,
+                                "lead_id": lead.id,
+                                "company": lead.company,
+                                "contact_name": lead.full_name,
+                                "priority": "HIGH",
+                                "due_in_days": 2,
+                                "reason": lead.recent_signal[:120],
+                            },
+                        )
+                        rem_txt = getattr(rem_res.content[0], "text", "{}") if rem_res.content else "{}"
+                        rec2 = MCPToolCallRecord(
+                            id=uuid.uuid4().hex[:8],
+                            timestamp_ms=int(time.time() * 1000),
+                            agent_name="OutreachMCPAgent",
+                            decision_reason=f"High-urgency score ({v.qualification_score}) on {lead.company} -> schedule 2-day .ics follow-up",
+                            server_name="leadslayer-ops-mcp",
+                            tool_name="schedule_followup_reminder",
+                            arguments_summary=f"lead_id={lead.id!r}, priority='HIGH', due_in_days=2",
+                            result_summary=rem_txt[:220],
+                            status="SUCCEEDED",
+                        )
+                        mcp_calls.append(rec2)
+                        await callbacks.on_mcp_tool_call(rec2)
+                        await callbacks.on_log(f"[MCP DECISION] {rec2.decision_reason} -> `schedule_followup_reminder`")
+
+                brief_md = (
+                    f"## Summary\n- Product: {startup_input.product_name}\n"
+                    f"- Evaluated: {len(leads)} | Killed: {killed_n} | Survived: {surv_n}\n"
+                    f"- Sharpened Value Prop: {snapshot.market_audit.sharpened_value_prop if snapshot.market_audit else 'N/A'}\n"
+                )
+                art_res = await session.call_tool(
+                    "save_campaign_artifacts",
+                    {
+                        "run_id": run_id,
+                        "product_name": startup_input.product_name,
+                        "summary_markdown": brief_md,
+                    },
+                )
+                art_txt = getattr(art_res.content[0], "text", "{}") if art_res.content else "{}"
+                rec3 = MCPToolCallRecord(
+                    id=uuid.uuid4().hex[:8],
+                    timestamp_ms=int(time.time() * 1000),
+                    agent_name="OutreachMCPAgent",
+                    decision_reason=f"Persist executive brief & audit trail to exports/{run_id}/",
+                    server_name="leadslayer-ops-mcp",
+                    tool_name="save_campaign_artifacts",
+                    arguments_summary=f"run_id={run_id!r}, product_name={startup_input.product_name!r}",
+                    result_summary=art_txt[:220],
+                    status="SUCCEEDED",
+                )
+                mcp_calls.append(rec3)
+                await callbacks.on_mcp_tool_call(rec3)
+                await callbacks.on_log(f"[MCP DECISION] {rec3.decision_reason} -> `save_campaign_artifacts`")
+    except Exception as exc:
+        await callbacks.on_log(f"[OutreachMCPAgent] MCP tool notice: {exc}")
+
+    await _pause(0.35)
 
     assert snapshot.market_audit is not None
     return PipelineFinalResult(
@@ -334,6 +446,7 @@ async def _run_authentic_replay(
         hunter_report=snapshot.hunter_report,
         verdicts=snapshot.verdicts,
         emails=snapshot.emails,
+        mcp_tool_calls=mcp_calls,
     )
 
 

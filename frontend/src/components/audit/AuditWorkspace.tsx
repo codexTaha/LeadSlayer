@@ -11,6 +11,7 @@ import {
   Globe,
   Layers,
   Loader2,
+  Package,
   Play,
   Search,
   Sparkles,
@@ -22,6 +23,7 @@ import { ICPCardsGrid } from "@/components/audit/ICPCardsGrid";
 import { MarketAuditCard } from "@/components/audit/MarketAuditCard";
 import { SlayingLevelSelector } from "@/components/audit/SlayingLevelSelector";
 import { fetchDemoPreset, parseCsvLeads } from "@/lib/api";
+import { ORBIX_PRESET_LEADS, ORBIX_PRESET_STARTUP } from "@/lib/presets";
 import { useLeadSlayerStore } from "@/store/useLeadSlayerStore";
 import type { LeadSourceType } from "@/types/contracts";
 
@@ -66,6 +68,12 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
     } finally {
       setIsLoadingPreset(false);
     }
+  };
+
+  const handleLoadOrbix = () => {
+    setError(null);
+    setPresetData(ORBIX_PRESET_STARTUP, ORBIX_PRESET_LEADS);
+    setCsvLabel("Orbix Packaging · 15-Lead Custom B2B Swarm Ready");
   };
 
   const handleCsvFile = async (file: File) => {
@@ -165,7 +173,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isLocked && (
               <button
                 type="button"
@@ -179,6 +187,15 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
             <button
               type="button"
               disabled={isLocked || isLoadingPreset}
+              onClick={handleLoadOrbix}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer disabled:opacity-50"
+            >
+              <Package className="h-3.5 w-3.5 text-emerald-400" />
+              Orbix Packaging (15 Leads)
+            </button>
+            <button
+              type="button"
+              disabled={isLocked || isLoadingPreset}
               onClick={handleLoadSample}
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 transition cursor-pointer disabled:opacity-50"
             >
@@ -187,7 +204,7 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
               ) : (
                 <Sparkles className="h-4 w-4 text-amber-400" />
               )}
-              Load KubeGuard AI + 50-Lead Swarm
+              KubeGuard AI (50 Leads)
             </button>
           </div>
         </div>
@@ -375,12 +392,12 @@ export function AuditWorkspace({ onLaunch }: AuditWorkspaceProps) {
                   {hasAi && hasLi
                     ? "Combined: AI Search + LinkedIn Search"
                     : hasLi
-                      ? "LinkedIn Search Mode (X-Ray / Harvey)"
-                      : "AI Search Mode (Google + Harvey Crawl)"}
+                      ? "LinkedIn Search Mode (X-Ray / Live Crawl)"
+                      : "AI Search Mode (Google + Live Crawl)"}
                 </div>
                 <p className="text-[11px] text-zinc-300 leading-relaxed">
                   Discovers real buyers, crawls team pages &amp; ATS hiring boards via{" "}
-                  <span className="font-mono text-indigo-300">Harvey</span>, checks DNS MX &amp; resolves emails ($0).
+                  <span className="font-mono text-indigo-300">LeadSlayer Crawler</span>, checks DNS MX &amp; resolves emails ($0).
                 </p>
                 <button
                   type="button"

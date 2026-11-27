@@ -274,10 +274,10 @@ async def _search_linkedin_candidates(
     sources: list[str] = []
     browser_cands: list[DiscoveredLeadCandidate] = []
 
-    # Path A: Live Harvey Playwright LinkedIn Automation (when LINKEDIN_EMAIL/PASSWORD + Playwright configured)
+    # Path A: Live LinkedIn Browser Automation (when LINKEDIN_EMAIL/PASSWORD + Playwright configured)
     if settings.linkedin_email and settings.linkedin_password and client is None:
         await callbacks.on_log(
-            "[HunterSwarm · LinkedIn] Running Harvey LinkedIn browser search for target buyers..."
+            "[HunterSwarm · LinkedIn] Running LeadSlayer LinkedIn browser search for target buyers..."
         )
         raw_profiles = await search_linkedin_via_harvey_browser(
             keywords=keywords,
@@ -300,12 +300,12 @@ async def _search_linkedin_candidates(
                     funding_stage="Unknown",
                     tech_stack=[],
                     recent_signal=f"Active LinkedIn profile in {prof.get('location') or 'target market'}",
-                    bio_snippet=f"Sourced directly via Harvey LinkedIn Search ({prof.get('linkedin_url', '')}).",
+                    bio_snippet=f"Sourced directly via LeadSlayer LinkedIn Search ({prof.get('linkedin_url', '')}).",
                     linkedin_url=prof.get("linkedin_url", ""),
                 )
             )
         if browser_cands:
-            sources.append("Harvey LinkedIn Browser")
+            sources.append("LeadSlayer LinkedIn Browser")
 
     # Path B: Accountless LinkedIn X-Ray Search via Gemini Search Grounding (always works at $0!)
     if len(browser_cands) < target_needed:
@@ -454,7 +454,7 @@ async def discover_leads_via_harvey_and_search(
     merged = _merge_candidate_pools(ai_cands, li_cands, own_domain, needed_pool)
 
     await callbacks.on_log(
-        f"[HunterSwarm] Merged {len(merged)} unique companies — running Harvey $0 site crawl, owner extractor, ATS job scan & DNS MX check..."
+        f"[HunterSwarm] Merged {len(merged)} unique companies — running live site crawl, owner extractor, ATS job scan & DNS MX check..."
     )
 
     dossiers: dict[str, HarveyCompanyDossier] = {}
@@ -560,9 +560,9 @@ async def discover_leads_via_harvey_and_search(
             "Try refining your product description or uploading a CSV."
         )
 
-    source_labels.extend(["Harvey People & ATS", "Harvey MX + Pattern"])
+    source_labels.extend(["Live People & ATS", "DNS MX + Pattern"])
     await callbacks.on_log(
-        f"[HunterSwarm] Harvey enrichment complete: {len(discovered_leads)} companies "
+        f"[HunterSwarm] Site & MX enrichment complete: {len(discovered_leads)} companies "
         f"({url_ok} live sites, {people_found} exec teams, {ats_found} ATS boards, {mx_valid} MX-valid domains)."
     )
     return discovered_leads, url_ok, list(dict.fromkeys(source_labels))

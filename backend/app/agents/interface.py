@@ -7,6 +7,7 @@ from app.models.schemas import (
     ICPProfile,
     LeadRecord,
     MarketAuditResult,
+    MCPToolCallRecord,
     ModelId,
     PipelinePhase,
     SlayerVerdict,
@@ -23,6 +24,7 @@ class PipelineCallbacks(Protocol):
     async def on_hunter_report(self, report: HunterReport) -> None: ...
     async def on_verdict(self, verdict: SlayerVerdict) -> None: ...
     async def on_email(self, draft: EmailDraft) -> None: ...
+    async def on_mcp_tool_call(self, record: MCPToolCallRecord) -> None: ...
 
 
 class PipelineFinalResult(BaseModel):
@@ -32,3 +34,4 @@ class PipelineFinalResult(BaseModel):
     hunter_report: HunterReport | None = None
     verdicts: dict[str, SlayerVerdict]
     emails: dict[str, EmailDraft]
+    mcp_tool_calls: list[MCPToolCallRecord] = []

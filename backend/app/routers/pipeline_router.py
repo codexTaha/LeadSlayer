@@ -6,16 +6,18 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sse_starlette.sse import EventSourceResponse
 
-from app.harvey_bridge.dispatcher import get_harvey_status
+from app.harvey_bridge.dispatcher import get_mail_status
 from app.models.schemas import (
     DispatchRequest,
     DispatchResponse,
-    HarveyStatusResponse,
+    MailStatusResponse,
+    MCPStatusResponse,
     PipelineStartResponse,
     ResurrectResponse,
     RunStateSnapshot,
     StartupInput,
 )
+from app.services.mcp_client import inspect_mcp_server
 from app.streaming.exporter import build_kill_audit_json, build_survivors_csv
 from app.streaming.run_manager import (
     LeadNotFoundError,
@@ -28,9 +30,17 @@ from app.streaming.run_manager import (
 def create_pipeline_router(manager: RunManager = default_run_manager) -> APIRouter:
     router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
-    @router.get("/harvey-status", response_model=HarveyStatusResponse)
-    async def harvey_status() -> HarveyStatusResponse:
-        return get_harvey_status()
+    @router.get("/mail-status", response_model=MailStatusResponse)
+    async def mail_status() -> MailStatusResponse:
+        return get_mail_status()
+
+    @router.get("/harvey-status", response_model=MailStatusResponse, include_in_schema=False)
+    async def legacy_mail_status() -> MailStatusResponse:
+        return get_mail_status()
+
+    @router.get("/mcp-status", response_model=MCPStatusResponse)
+    async def mcp_status() -> MCPStatusResponse:
+        return await inspect_mcp_server()
 
     @router.post("/start", status_code=202, response_model=PipelineStartResponse)
     async def start_pipeline(startup_input: StartupInput) -> PipelineStartResponse:

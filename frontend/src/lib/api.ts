@@ -1,13 +1,15 @@
 import type {
   DeliveryMode,
   DispatchResponse,
-  HarveyStatusResponse,
   HealthResponse,
+  MailStatusResponse,
+  MCPStatusResponse,
   ParseCsvResponse,
   PipelineStartResponse,
   PresetResponse,
   ResurrectResponse,
   RunStateSnapshot,
+  SMTPConnectRequest,
   StartupInput,
 } from "@/types/contracts";
 
@@ -75,11 +77,40 @@ export async function resurrectLead(
   return handleJson<ResurrectResponse>(res);
 }
 
-export async function fetchHarveyStatus(): Promise<HarveyStatusResponse> {
-  const res = await fetch(`${API_BASE}/api/pipeline/harvey-status`, {
+export async function fetchMailStatus(): Promise<MailStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/pipeline/mail-status`, {
     cache: "no-store",
   });
-  return handleJson<HarveyStatusResponse>(res);
+  return handleJson<MailStatusResponse>(res);
+}
+
+export async function fetchMcpStatus(): Promise<MCPStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/pipeline/mcp-status`, {
+    cache: "no-store",
+  });
+  return handleJson<MCPStatusResponse>(res);
+}
+
+export async function connectSmtpAccount(
+  payload: SMTPConnectRequest
+): Promise<MailStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/mail/connect-smtp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleJson<MailStatusResponse>(res);
+}
+
+export async function disconnectMailAccount(): Promise<MailStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/mail/disconnect`, {
+    method: "POST",
+  });
+  return handleJson<MailStatusResponse>(res);
+}
+
+export function getGoogleOAuthStartUrl(): string {
+  return `${API_BASE}/api/mail/oauth/google/start`;
 }
 
 export async function dispatchEmails(

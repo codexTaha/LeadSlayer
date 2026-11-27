@@ -55,6 +55,9 @@ class _DummyCallbacks:
     async def on_email(self, draft) -> None:
         pass
 
+    async def on_mcp_tool_call(self, record) -> None:
+        pass
+
 
 class _FakeAsyncGenAIClient:
     def __init__(self, mode: str = "slayer") -> None:

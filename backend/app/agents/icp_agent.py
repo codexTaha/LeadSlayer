@@ -10,6 +10,7 @@ from google.adk.events import Event, EventActions
 from pydantic import ConfigDict
 
 from app.agents.interface import PipelineCallbacks
+from app.agents.key_rotator import key_rotator
 from app.agents.prompts import ICP_ENGINE_SYSTEM_PROMPT
 from app.agents.rate_limiter import GentleAdaptiveExecutor
 from app.agents.structured_outputs import ICPBatchOutput

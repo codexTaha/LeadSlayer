@@ -78,6 +78,7 @@ async def test_e2e_safe_replay_pipeline_and_exports(tmp_path: Path) -> None:
         assert stream_res.status_code == 200
         assert "event: agent_log" in stream_res.text
         assert stream_res.text.count("event: lead_verdict") == 50
+        assert "event: mcp_tool_call" in stream_res.text
         assert "event: pipeline_completed" in stream_res.text
 
         # Resurrect a killed lead, dispatch, and verify CSV export
@@ -103,6 +104,10 @@ def test_app_exposes_health_preset_and_pipeline_routes() -> None:
         "/api/pipeline/{run_id}/resurrect/{lead_id}",
         "/api/pipeline/{run_id}/dispatch",
         "/api/pipeline/{run_id}/export",
+        "/api/pipeline/mcp-status",
+        "/api/pipeline/mail-status",
+        "/api/mail/connect-smtp",
+        "/api/mail/disconnect",
     }
     assert expected.issubset(paths)
 

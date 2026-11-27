@@ -17,6 +17,7 @@ from app.models.schemas import (
     HunterReport,
     ICPProfile,
     MarketAuditResult,
+    MCPToolCallRecord,
     ModelId,
     PipelinePhase,
     SlayerVerdict,
@@ -72,6 +73,12 @@ class ConsoleCallbacks:
         print(
             f"   [EMAIL] {draft.lead_id} -> {draft.recipient_name} ({draft.company}) | "
             f"Subj: {draft.subject!r} | span_ok={draft.email_evidence_phrase in draft.body}",
+            flush=True,
+        )
+
+    async def on_mcp_tool_call(self, record: MCPToolCallRecord) -> None:
+        print(
+            f"   [MCP] {record.tool_name} ({record.status}) | {record.decision_reason}",
             flush=True,
         )
 

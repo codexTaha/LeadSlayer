@@ -14,6 +14,7 @@ const STREAM_EVENTS: StreamEventType[] = [
   "leads_loaded",
   "lead_verdict",
   "email_drafted",
+  "mcp_tool_call",
   "telemetry_update",
   "pipeline_completed",
   "pipeline_error",

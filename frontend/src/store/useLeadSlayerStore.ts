@@ -7,6 +7,7 @@ import type {
   LeadRecord,
   LeadSourceType,
   MarketAuditResult,
+  MCPToolCallRecord,
   PipelinePhase,
   RejectionCategory,
   ResurrectResponse,
@@ -47,6 +48,7 @@ interface LeadSlayerState {
   hunterReport: HunterReport | null;
   verdictsById: Record<string, SlayerVerdict>;
   emailsById: Record<string, EmailDraft>;
+  mcpToolCalls: MCPToolCallRecord[];
   telemetry: TelemetryMetrics | null;
   selectedLeadId: string | null;
   activeCategoryFilter: CategoryFilter;
@@ -102,6 +104,7 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
   hunterReport: null,
   verdictsById: {},
   emailsById: {},
+  mcpToolCalls: [],
   telemetry: null,
   selectedLeadId: null,
   activeCategoryFilter: "ALL",
@@ -204,6 +207,7 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
       hunterReport: null,
       verdictsById: {},
       emailsById: {},
+      mcpToolCalls: [],
       telemetry: null,
       selectedLeadId: null,
       activeCategoryFilter: "ALL",
@@ -302,6 +306,15 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
           };
         }
 
+        case "mcp_tool_call": {
+          const rec = event.payload.mcp_tool_call;
+          const next = [...s.mcpToolCalls.filter((x) => x.id !== rec.id), rec];
+          return {
+            mcpToolCalls: next,
+            telemetry: event.payload.telemetry ?? s.telemetry,
+          };
+        }
+
         case "telemetry_update":
           return { telemetry: event.payload.telemetry };
 
@@ -348,6 +361,7 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
       leadsById,
       verdictsById: snapshot.verdicts,
       emailsById: snapshot.emails,
+      mcpToolCalls: snapshot.mcp_tool_calls ?? [],
       telemetry: snapshot.telemetry,
       errorMessage: snapshot.error_message,
     });
@@ -392,6 +406,7 @@ export const useLeadSlayerStore = create<LeadSlayerState>((set) => ({
       hunterReport: null,
       verdictsById: {},
       emailsById: {},
+      mcpToolCalls: [],
       telemetry: null,
       selectedLeadId: null,
       activeCategoryFilter: "ALL",

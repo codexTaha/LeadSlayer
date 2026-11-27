@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+**/.venv
+**/node_modules
+frontend/.next
+**/__pycache__
+**/.pytest_cache
+exports/
+*.docx
